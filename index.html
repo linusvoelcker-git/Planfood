@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planfood – Wochenplaner</title>
+  <meta name="description" content="Essen für die Woche planen, Rezepte verwalten und die Einkaufsliste automatisch erstellen." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥕</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🥕</span>
+      <span class="brand-name">Planfood</span>
+    </div>
+
+    <nav class="weeknav" aria-label="Woche wählen">
+      <button class="icon-btn" id="prevWeek" title="Vorherige Woche" aria-label="Vorherige Woche">‹</button>
+      <div class="weeknav-label">
+        <strong id="weekTitle">KW</strong>
+        <span id="weekRange"></span>
+      </div>
+      <button class="icon-btn" id="nextWeek" title="Nächste Woche" aria-label="Nächste Woche">›</button>
+      <button class="btn btn-ghost btn-sm" id="todayBtn">Heute</button>
+    </nav>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="generateListBtn">🛒 Einkaufsliste generieren</button>
+      <button class="btn" id="archiveBtn">🗂 Archiv</button>
+      <button class="icon-btn" id="settingsBtn" title="Einstellungen &amp; Daten" aria-label="Einstellungen">⚙︎</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="planner" aria-label="Wochenkalender">
+      <div class="banner" id="weekBanner" hidden></div>
+      <div class="calendar-scroll">
+        <div class="calendar" id="calendar"></div>
+      </div>
+      <details class="week-summary" id="weekSummary">
+        <summary>
+          <span>Nährwerte dieser Woche</span>
+          <span class="summary-quick" id="summaryQuick"></span>
+        </summary>
+        <div id="summaryBody"></div>
+      </details>
+    </section>
+
+    <aside class="side" aria-label="Rezepte und Einkaufsliste">
+      <div class="side-tabs" role="tablist">
+        <button role="tab" class="side-tab active" data-tab="cards" aria-selected="true">📇 Rezeptkartei</button>
+        <button role="tab" class="side-tab" data-tab="shopping" aria-selected="false">🛒 Einkaufsliste <span class="badge" id="shoppingBadge" hidden></span></button>
+      </div>
+
+      <div class="side-panel" id="panel-cards">
+        <div class="cards-toolbar">
+          <input type="search" id="recipeSearch" placeholder="Rezept suchen …" aria-label="Rezept suchen" />
+          <button class="btn btn-primary btn-sm" id="newRecipeBtn">＋ Neues Rezept</button>
+        </div>
+        <div class="cardbox" id="cardbox">
+          <div class="cardbox-inner" id="cardboxInner"></div>
+        </div>
+        <p class="hint">Karte auf einen Tag ziehen · Klick öffnet das Rezept</p>
+      </div>
+
+      <div class="side-panel" id="panel-shopping" hidden>
+        <div id="shoppingPanel"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Rezept-Detail -->
+  <dialog id="detailDialog" class="dialog"></dialog>
+
+  <!-- Rezept-Editor -->
+  <dialog id="editorDialog" class="dialog dialog-wide">
+    <form method="dialog" id="editorForm" class="editor">
+      <header class="dialog-head">
+        <h2 id="editorTitle">Neues Rezept</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
+      </header>
+      <div class="dialog-body">
+        <div class="grid-2">
+          <label class="field">
+            <span>Name</span>
+            <input name="name" required placeholder="z. B. Linsencurry" />
+          </label>
+          <div class="grid-2 tight">
+            <label class="field">
+              <span>Kategorie</span>
+              <select name="category"></select>
+            </label>
+            <label class="field">
+              <span>Portionen</span>
+              <input name="servings" type="number" min="1" step="1" value="2" required />
+            </label>
+          </div>
+        </div>
+        <div class="field">
+          <span>Farbe</span>
+          <div class="swatches" id="colorSwatches"></div>
+        </div>
+
+        <div class="field">
+          <span>Zutaten <small>(Mengen in Gramm oder Stück)</small></span>
+          <div class="ing-table" id="ingTable"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="addIngBtn">＋ Zutat hinzufügen</button>
+          <datalist id="ingredientNames"></datalist>
+        </div>
+
+        <label class="field">
+          <span>Zubereitung</span>
+          <textarea name="instructions" rows="4" placeholder="Kurze Anleitung …"></textarea>
+        </label>
+
+        <div class="nutri-preview" id="editorNutri"></div>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Rezept speichern</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Nährwert-Suche -->
+  <dialog id="lookupDialog" class="dialog dialog-wide"></dialog>
+
+  <!-- Archiv -->
+  <dialog id="archiveDialog" class="dialog dialog-wide"></dialog>
+
+  <!-- Einstellungen -->
+  <dialog id="settingsDialog" class="dialog"></dialog>
+
+  <!-- Einplanen-Auswahl (Touch-Geräte) -->
+  <dialog id="planDialog" class="dialog"></dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/foods.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
