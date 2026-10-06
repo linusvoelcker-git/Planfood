@@ -1252,6 +1252,7 @@
 
     document.addEventListener('dragend', () => {
       ui.drag = null;
+      if (ui.releaseCard) ui.releaseCard();
       $$('.dragging').forEach((el) => el.classList.remove('dragging'));
       $$('.slot.over').forEach((el) => el.classList.remove('over'));
       $('#cardbox').classList.remove('drop-remove', 'over');
@@ -1359,10 +1360,39 @@
       const avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
       card.style.setProperty('--lift', Math.max(0, Math.min(118, avail)) + 'px');
     };
-    $('#cardboxInner').addEventListener('mouseover', (ev) => {
+
+    // „Mit der Hand durch die Kartei gehen“: erst antippen (peek), nach kurzem Verweilen herausziehen (pulled)
+    const PULL_DELAY = 160;
+    const hand = { card: null, timer: null };
+    const releaseCard = () => {
+      clearTimeout(hand.timer);
+      if (hand.card) hand.card.classList.remove('peek', 'pulled');
+      $$('#cardboxInner .nudge-prev, #cardboxInner .nudge-next').forEach((el) => el.classList.remove('nudge-prev', 'nudge-next'));
+      hand.card = null;
+    };
+    const touchCard = (card) => {
+      if (card === hand.card) return;
+      releaseCard();
+      hand.card = card;
+      setLift(card);
+      card.classList.add('peek');
+      const prev = card.previousElementSibling;
+      const next = card.nextElementSibling;
+      if (prev && prev.classList.contains('rcard')) prev.classList.add('nudge-prev');
+      if (next) next.classList.add('nudge-next');
+      hand.timer = setTimeout(() => card.classList.add('pulled'), PULL_DELAY);
+    };
+    $('#cardboxInner').addEventListener('pointerover', (ev) => {
+      if (ev.pointerType === 'touch' || ui.drag) return;
       const card = ev.target.closest('.rcard');
-      if (card) setLift(card);
+      if (card) touchCard(card);
+      else if (ev.target.closest('.divider')) releaseCard();
     });
+    $('#cardboxInner').addEventListener('pointerleave', () => {
+      if (!ui.drag) releaseCard();
+    });
+    $('#cardboxInner').addEventListener('dragstart', () => clearTimeout(hand.timer));
+    ui.releaseCard = releaseCard;
     $('#cardboxInner').addEventListener('focusin', (ev) => {
       const card = ev.target.closest('.rcard');
       if (card) setLift(card);
