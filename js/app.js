@@ -79,6 +79,30 @@
     return S.ingredientInfo(name) || N.autoDetect(name);
   }
 
+  /** Gleiche Kurve wie cubic-bezier(0.45, 0.05, 0.2, 1) beim Herausziehen der Karten. */
+  function pullEasing(t) {
+    const [x1, y1, x2, y2] = [0.45, 0.05, 0.2, 1];
+    const bez = (u, a, b) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (bez(mid, x1, x2) < t) lo = mid;
+      else hi = mid;
+    }
+    return bez((lo + hi) / 2, y1, y2);
+  }
+  function animateScroll(el, to, ms) {
+    const from = el.scrollTop;
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / ms);
+      el.scrollTop = from + (to - from) * pullEasing(t);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   function toast(msg) {
     const t = $('#toast');
     t.textContent = msg;
@@ -1404,12 +1428,22 @@
       if (card) openDetail(card.dataset.id);
     });
     // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
+    const LIFT = 180; // Kartenhöhe (200) − Reiterhöhe der nächsten Karte (20) → Karte ganz über der nächsten
+    const PULL_MS = 850; // = Dauer von .rcard.pulled in styles.css
+    const autoScroll = { until: 0 };
     const setLift = (card) => {
       // offsetTop ignoriert Transformationen → Position der Karte im Ruhezustand
       const inner = $('#cardboxInner');
-      const avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
-      // 186 px = Kartenhöhe (222) − sichtbarer Streifen (46) + etwas Luft → Karte ganz draußen
-      card.style.setProperty('--lift', Math.max(0, Math.min(186, avail)) + 'px');
+      let avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
+      // Steht die Karte nach dem Scrollen zu weit oben, scrollt die Kartei im gleichen Takt wie
+      // das Herausziehen ein Stück zurück – so kommt die Karte trotzdem ganz heraus und bleibt unter der Maus.
+      const missing = Math.min(LIFT - avail, inner.scrollTop);
+      if (missing > 0) {
+        animateScroll(inner, inner.scrollTop - missing, PULL_MS);
+        autoScroll.until = performance.now() + PULL_MS + 50;
+        avail += missing;
+      }
+      card.style.setProperty('--lift', Math.max(0, Math.min(LIFT, avail)) + 'px');
     };
 
     // „Mit der Hand durch die Kartei gehen“: kurz verweilen, dann wird die Karte
@@ -1419,7 +1453,7 @@
     const releaseCard = () => {
       clearTimeout(hand.timer);
       if (hand.card) hand.card.classList.remove('pulled');
-      $$('#cardboxInner .nudge-prev, #cardboxInner .nudge-next').forEach((el) => el.classList.remove('nudge-prev', 'nudge-next'));
+      $$('#cardboxInner .nudge-prev').forEach((el) => el.classList.remove('nudge-prev'));
       hand.card = null;
     };
     const touchCard = (card) => {
@@ -1430,13 +1464,12 @@
         setLift(card);
         card.classList.add('pulled');
         const prev = card.previousElementSibling;
-        const next = card.nextElementSibling;
         if (prev && prev.classList.contains('rcard')) prev.classList.add('nudge-prev');
-        if (next) next.classList.add('nudge-next');
       }, PULL_DELAY);
     };
     $('#cardboxInner').addEventListener('pointerover', (ev) => {
-      if (ev.pointerType === 'touch' || ui.drag) return;
+      // während die Kartei automatisch nachscrollt, gleitet der Inhalt unter der Maus – nicht umschalten
+      if (ev.pointerType === 'touch' || ui.drag || performance.now() < autoScroll.until) return;
       const card = ev.target.closest('.rcard');
       if (card) touchCard(card);
       else if (ev.target.closest('.divider')) releaseCard();

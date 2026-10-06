@@ -702,7 +702,7 @@ button.tag.active {
   display: flex;
   gap: 0.25rem;
   height: 22px;
-  margin-top: 38px;
+  margin-top: 24px;
   overflow: hidden;
   align-items: center;
 }
@@ -803,7 +803,8 @@ button.tag.active {
   overflow-y: auto;
   overflow-x: hidden;
   /* Platz, damit gezogene Karten oben nicht abgeschnitten werden */
-  padding: 40px 4px 120px;
+  /* Platz über den Karten, damit auch die obersten ganz herausgezogen werden können */
+  padding: 162px 4px 120px;
   scrollbar-width: thin;
 }
 .cardbox-empty {
@@ -917,9 +918,8 @@ button.tag.active {
 /* Registerkarte (Kategorie) – liegt im Stapel wie eine Karte */
 .divider,
 .rcard {
-  --h: 222px;
+  --h: 200px;
   --step: 46px;
-  z-index: 1; /* gemeinsame Ebene, damit eine gezogene Karte (z-index 50) davor liegen kann */
   position: relative;
   height: var(--h);
   margin-top: calc(var(--step) - var(--h));
@@ -931,7 +931,7 @@ button.tag.active {
 }
 /* nach einer Kategorie etwas mehr Abstand, damit deren Reiter sichtbar bleibt */
 .rcard + .divider {
-  margin-top: calc(var(--step) + 14px - var(--h));
+  margin-top: calc(var(--step) + 2px - var(--h));
 }
 .divider {
   background: color-mix(in srgb, var(--box) 25%, #e9dcc5);
@@ -958,15 +958,16 @@ button.tag.active {
 .rcard {
   background-color: var(--card);
   background-image: linear-gradient(180deg, transparent 0 26px, color-mix(in srgb, var(--c) 70%, #fff) 26px 28px, transparent 28px),
-    repeating-linear-gradient(180deg, transparent 0 21px, var(--card-line) 21px 22px);
-  background-position: 0 0, 0 20px;
+    repeating-linear-gradient(180deg, transparent 0 19px, var(--card-line) 19px 20px);
+  background-position: 0 0, 0 50px;
+  background-size: 100% 100%, 100% calc(100% - 50px);
+  background-repeat: no-repeat;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.18), 0 1px 0 rgba(0, 0, 0, 0.05);
   color: #2d2a26;
   cursor: grab;
   transform-origin: 50% 100%;
   /* Zurückgleiten: ruhig auslaufend, ohne Nachschwingen */
-  /* z-index springt erst zurück, wenn die Karte wieder im Kasten steckt */
-  transition: transform 0.6s cubic-bezier(0.33, 0.9, 0.3, 1), box-shadow 0.6s ease, z-index 0s linear 0.6s;
+  transition: transform 0.6s cubic-bezier(0.33, 0.9, 0.3, 1), box-shadow 0.6s ease;
   will-change: transform;
 }
 .rcard-tab {
@@ -1008,10 +1009,10 @@ button.tag.active {
 }
 .rcard-ings {
   list-style: none;
-  margin: 2px 0 0;
+  margin: 0;
   padding: 0;
   font-size: 0.78rem;
-  line-height: 22px;
+  line-height: 20px;
 }
 .rcard-ings li {
   display: flex;
@@ -1039,7 +1040,10 @@ button.tag.active {
  * Das Herausziehen aus dem Register (Klassen setzt app.js):
  *  .pulled  nach kurzem Verweilen wird die Karte in EINER durchgehenden Bewegung
  *           herausgezogen: sanft anfahren, lang auslaufen, leicht nach vorn gekippt.
- *  Nachbarn: die Karte davor neigt sich zurück, die dahinter wird ein Stück weggedrückt.
+ *           Sie bleibt dabei HINTER den folgenden Karten (wie im echten Kasten) und wird so weit
+ *           hochgezogen, dass sie trotzdem komplett zu sehen ist; die nächste Karte bleibt an
+ *           ihrem Platz und direkt anwählbar.
+ *  Nachbar: die Karte davor neigt sich etwas zurück.
  * Wichtig: Alle Zustände nutzen dieselbe Liste von Transform-Funktionen
  * (perspective, translateY, rotateX, rotate) – sonst interpoliert der Browser
  * über Matrizen und die Bewegung wirkt ruckelig.
@@ -1050,23 +1054,14 @@ button.tag.active {
 .rcard.pulled,
 .rcard:focus-visible,
 .rcard.dragging {
-  transform: perspective(900px) translateY(calc(var(--lift, 186px) * -1)) rotateX(4deg) rotate(-1deg);
-  z-index: 50; /* komplett vor den übrigen Karten, damit man sie ganz sieht */
+  transform: perspective(900px) translateY(calc(var(--lift, 180px) * -1)) rotateX(4deg) rotate(-1deg);
   box-shadow: var(--shadow-lift);
   outline: none;
-  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1), box-shadow 0.9s ease, z-index 0s;
+  transition: transform 0.85s cubic-bezier(0.45, 0.05, 0.2, 1), box-shadow 0.85s ease;
 }
 .rcard.nudge-prev {
   transform: perspective(900px) translateY(-4px) rotateX(0deg) rotate(0.25deg);
-  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1);
-}
-.rcard.nudge-next {
-  transform: perspective(900px) translateY(7px) rotateX(0deg) rotate(0.2deg);
-  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1);
-}
-.divider.nudge-next {
-  transform: translateY(7px) rotate(0.2deg);
-  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1);
+  transition: transform 0.85s cubic-bezier(0.45, 0.05, 0.2, 1);
 }
 .divider {
   transition: transform 0.55s cubic-bezier(0.33, 0.9, 0.3, 1);
