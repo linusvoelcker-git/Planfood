@@ -79,9 +79,9 @@
     return S.ingredientInfo(name) || N.autoDetect(name);
   }
 
-  /** Gleiche Kurve wie cubic-bezier(0.45, 0.05, 0.2, 1) beim Herausziehen der Karten. */
+  /** Gleiche Kurve wie cubic-bezier(0.37, 0, 0.63, 1) beim Herausziehen der Karten. */
   function pullEasing(t) {
-    const [x1, y1, x2, y2] = [0.45, 0.05, 0.2, 1];
+    const [x1, y1, x2, y2] = [0.37, 0, 0.63, 1];
     const bez = (u, a, b) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3;
     let lo = 0;
     let hi = 1;
@@ -1429,7 +1429,7 @@
     });
     // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
     const LIFT = 180; // Kartenhöhe (200) − Reiterhöhe der nächsten Karte (20) → Karte ganz über der nächsten
-    const PULL_MS = 850; // = Dauer von .rcard.pulled in styles.css
+    const PULL_MS = 550; // = Dauer von .rcard.pulled in styles.css
     const autoScroll = { until: 0 };
     const setLift = (card) => {
       // offsetTop ignoriert Transformationen → Position der Karte im Ruhezustand
@@ -1448,7 +1448,7 @@
 
     // „Mit der Hand durch die Kartei gehen“: kurz verweilen, dann wird die Karte
     // in einer durchgehenden Bewegung herausgezogen (Nachbarn bewegen sich mit).
-    const PULL_DELAY = 160;
+    const PULL_DELAY = 60; // kurzes Verweilen, damit schnelles Drüberstreichen nicht jede Karte zieht
     const hand = { card: null, timer: null };
     const releaseCard = () => {
       clearTimeout(hand.timer);

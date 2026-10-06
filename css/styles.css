@@ -966,8 +966,8 @@ button.tag.active {
   color: #2d2a26;
   cursor: grab;
   transform-origin: 50% 100%;
-  /* Zurückgleiten: ruhig auslaufend, ohne Nachschwingen */
-  transition: transform 0.6s cubic-bezier(0.33, 0.9, 0.3, 1), box-shadow 0.6s ease;
+  /* Zurückgleiten: weich an- und auslaufend */
+  transition: transform 0.45s cubic-bezier(0.37, 0, 0.63, 1);
   will-change: transform;
 }
 .rcard-tab {
@@ -1045,23 +1045,41 @@ button.tag.active {
  *           ihrem Platz und direkt anwählbar.
  *  Nachbar: die Karte davor neigt sich etwas zurück.
  * Wichtig: Alle Zustände nutzen dieselbe Liste von Transform-Funktionen
- * (perspective, translateY, rotateX, rotate) – sonst interpoliert der Browser
- * über Matrizen und die Bewegung wirkt ruckelig.
+ * (translateY, rotate) – sonst interpoliert der Browser über Matrizen und die
+ * Bewegung wirkt ruckelig. Animiert wird nur transform/opacity (läuft auf der GPU).
  */
 .rcard {
-  transform: perspective(900px) translateY(0) rotateX(0deg) rotate(0deg);
+  transform: translateY(0) rotate(0deg);
+}
+/* Schatten liegt auf einer eigenen Ebene und wird nur ein-/ausgeblendet (Deckkraft) –
+   ein animierter box-shadow müsste in jedem Bild neu gezeichnet werden und ruckelt */
+.rcard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-lift);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
 }
 .rcard.pulled,
 .rcard:focus-visible,
 .rcard.dragging {
-  transform: perspective(900px) translateY(calc(var(--lift, 180px) * -1)) rotateX(4deg) rotate(-1deg);
-  box-shadow: var(--shadow-lift);
+  transform: translateY(calc(var(--lift, 180px) * -1)) rotate(-0.8deg);
   outline: none;
-  transition: transform 0.85s cubic-bezier(0.45, 0.05, 0.2, 1), box-shadow 0.85s ease;
+  /* eine durchgehende, weiche Bewegung: sanft anfahren, gleichmäßig gleiten, sanft abbremsen */
+  transition: transform 0.55s cubic-bezier(0.37, 0, 0.63, 1);
+}
+.rcard.pulled::before,
+.rcard:focus-visible::before,
+.rcard.dragging::before {
+  opacity: 1;
+  transition-duration: 0.55s;
 }
 .rcard.nudge-prev {
-  transform: perspective(900px) translateY(-4px) rotateX(0deg) rotate(0.25deg);
-  transition: transform 0.85s cubic-bezier(0.45, 0.05, 0.2, 1);
+  transform: translateY(-4px) rotate(0.25deg);
+  transition: transform 0.55s cubic-bezier(0.37, 0, 0.63, 1);
 }
 .divider {
   transition: transform 0.55s cubic-bezier(0.33, 0.9, 0.3, 1);
@@ -1079,6 +1097,7 @@ button.tag.active {
 @media (prefers-reduced-motion: reduce) {
   .rcard,
   .rcard.pulled,
+  .rcard::before,
   .divider,
   .entry {
     transition: none;
