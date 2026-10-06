@@ -1408,7 +1408,8 @@
       // offsetTop ignoriert Transformationen → Position der Karte im Ruhezustand
       const inner = $('#cardboxInner');
       const avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
-      card.style.setProperty('--lift', Math.max(0, Math.min(118, avail)) + 'px');
+      // 186 px = Kartenhöhe (222) − sichtbarer Streifen (46) + etwas Luft → Karte ganz draußen
+      card.style.setProperty('--lift', Math.max(0, Math.min(186, avail)) + 'px');
     };
 
     // „Mit der Hand durch die Kartei gehen“: kurz verweilen, dann wird die Karte

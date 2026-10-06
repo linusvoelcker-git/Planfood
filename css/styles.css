@@ -919,6 +919,7 @@ button.tag.active {
 .rcard {
   --h: 222px;
   --step: 46px;
+  z-index: 1; /* gemeinsame Ebene, damit eine gezogene Karte (z-index 50) davor liegen kann */
   position: relative;
   height: var(--h);
   margin-top: calc(var(--step) - var(--h));
@@ -964,7 +965,8 @@ button.tag.active {
   cursor: grab;
   transform-origin: 50% 100%;
   /* Zurückgleiten: ruhig auslaufend, ohne Nachschwingen */
-  transition: transform 0.55s cubic-bezier(0.33, 0.9, 0.3, 1), box-shadow 0.55s ease;
+  /* z-index springt erst zurück, wenn die Karte wieder im Kasten steckt */
+  transition: transform 0.6s cubic-bezier(0.33, 0.9, 0.3, 1), box-shadow 0.6s ease, z-index 0s linear 0.6s;
   will-change: transform;
 }
 .rcard-tab {
@@ -1048,22 +1050,23 @@ button.tag.active {
 .rcard.pulled,
 .rcard:focus-visible,
 .rcard.dragging {
-  transform: perspective(900px) translateY(calc(var(--lift, 118px) * -1)) rotateX(4deg) rotate(-1deg);
+  transform: perspective(900px) translateY(calc(var(--lift, 186px) * -1)) rotateX(4deg) rotate(-1deg);
+  z-index: 50; /* komplett vor den übrigen Karten, damit man sie ganz sieht */
   box-shadow: var(--shadow-lift);
   outline: none;
-  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1), box-shadow 0.75s ease;
+  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1), box-shadow 0.9s ease, z-index 0s;
 }
 .rcard.nudge-prev {
   transform: perspective(900px) translateY(-4px) rotateX(0deg) rotate(0.25deg);
-  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1);
+  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1);
 }
 .rcard.nudge-next {
   transform: perspective(900px) translateY(7px) rotateX(0deg) rotate(0.2deg);
-  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1);
+  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1);
 }
 .divider.nudge-next {
   transform: translateY(7px) rotate(0.2deg);
-  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1);
+  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.2, 1);
 }
 .divider {
   transition: transform 0.55s cubic-bezier(0.33, 0.9, 0.3, 1);
