@@ -14,6 +14,16 @@ window.PF_STORE = (function () {
   ];
   const CATEGORIES = ['Frühstück', 'Hauptgericht', 'Snack', 'Sonstiges'];
   const COLORS = ['#e76f51', '#f4a261', '#e9c46a', '#8ab17d', '#2a9d8f', '#4d908e', '#577590', '#9b5de5', '#d6607e'];
+  // Farben für Tags (gut unterscheidbar, auf hellem und dunklem Grund lesbar)
+  const TAG_COLORS = ['#d64545', '#e08a1e', '#2f9e5b', '#2b7bb9', '#8e5bd6', '#1f9aa0', '#c2457e', '#6b7a2a', '#7a5a3a'];
+  const DEFAULT_TAGS = [
+    ['High Protein', '#d64545'],
+    ['Schnell', '#e08a1e'],
+    ['Vegan', '#2f9e5b'],
+    ['Low Carb', '#2b7bb9'],
+    ['Meal Prep', '#8e5bd6'],
+    ['Günstig', '#1f9aa0'],
+  ];
   const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
   let state = null;
@@ -66,6 +76,7 @@ window.PF_STORE = (function () {
     state.ingredients ||= {};
     state.weeks ||= {};
     state.settings ||= { usdaKey: '' };
+    migrateTags();
     Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
     save(false);
@@ -96,6 +107,7 @@ window.PF_STORE = (function () {
     state = data;
     state.ingredients ||= {};
     state.settings ||= { usdaKey: '' };
+    migrateTags();
     Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
     save();
@@ -136,6 +148,41 @@ window.PF_STORE = (function () {
         week.slots[day][meal] = list.filter((e) => e.recipeId !== id);
       });
     }
+    save();
+  }
+
+  /* ---------- Tags ---------- */
+  function migrateTags() {
+    if (!Array.isArray(state.tags)) state.tags = DEFAULT_TAGS.map(([name, color]) => ({ id: uid(), name, color }));
+    state.recipes.forEach((r) => (r.tags ||= []));
+  }
+  function getTag(id) {
+    return state.tags.find((t) => t.id === id) || null;
+  }
+  function findTagByName(name) {
+    return state.tags.find((t) => N.norm(t.name) === N.norm(name)) || null;
+  }
+  /** Neuen Tag anlegen (oder vorhandenen gleichen Namens zurückgeben). */
+  function addTag(name, color, notify = true) {
+    name = name.trim();
+    if (!name) return null;
+    const existing = findTagByName(name);
+    if (existing) return existing;
+    const tag = { id: uid(), name, color: color || TAG_COLORS[state.tags.length % TAG_COLORS.length] };
+    state.tags.push(tag);
+    if (notify) save();
+    return tag;
+  }
+  function updateTag(id, changes) {
+    const tag = getTag(id);
+    if (!tag) return;
+    if (changes.name != null && changes.name.trim()) tag.name = changes.name.trim();
+    if (changes.color) tag.color = changes.color;
+    save();
+  }
+  function deleteTag(id) {
+    state.tags = state.tags.filter((t) => t.id !== id);
+    state.recipes.forEach((r) => (r.tags = (r.tags || []).filter((t) => t !== id)));
     save();
   }
 
@@ -390,6 +437,68 @@ window.PF_STORE = (function () {
     return statusMap(week).get(entry.uid) || null;
   }
 
+  /* ---------- Import ---------- */
+  /**
+   * Übernimmt geparste Rezepte (siehe importer.js).
+   * opts.overwrite: gleichnamige Rezepte aktualisieren statt überspringen
+   * opts.planWeek: Wochenstart, in den der Plan aus der Datei eingetragen wird
+   */
+  function importData(data, opts = {}) {
+    const result = { created: 0, updated: 0, skipped: 0, planned: 0, nutrition: 0 };
+    for (const n of data.nutrition) {
+      state.ingredients[N.norm(n.name)] = {
+        name: n.name,
+        nutrients: n.nutrients,
+        gramsPerPiece: (state.ingredients[N.norm(n.name)] || {}).gramsPerPiece || null,
+        source: 'Excel-Import',
+      };
+      result.nutrition++;
+    }
+    const byName = new Map();
+    for (const r of data.recipes) {
+      const existing = state.recipes.find((x) => N.norm(x.name) === N.norm(r.name));
+      if (existing && !opts.overwrite) {
+        result.skipped++;
+        byName.set(N.norm(r.name), existing);
+        continue;
+      }
+      const recipe = {
+        id: existing ? existing.id : uid(),
+        color: existing ? existing.color : COLORS[(state.recipes.length + result.created) % COLORS.length],
+        name: r.name,
+        category: r.category,
+        servings: r.servings,
+        ingredients: r.ingredients.map((i) => ({ ...i })),
+        instructions: r.instructions,
+        tags: [...new Set([...(existing ? existing.tags || [] : []), ...(r.tags || []).map((n) => addTag(n, null, false)).filter(Boolean).map((t) => t.id)])],
+      };
+      // wie upsertRecipe, aber ohne Speichern pro Rezept
+      for (const ing of recipe.ingredients) {
+        const key = N.norm(ing.name);
+        if (!state.ingredients[key]) {
+          const hit = N.autoDetect(ing.name);
+          if (hit) state.ingredients[key] = { name: ing.name, ...hit };
+        }
+      }
+      if (existing) Object.assign(existing, recipe), result.updated++;
+      else state.recipes.push(recipe), result.created++;
+      byName.set(N.norm(r.name), existing || recipe);
+    }
+    if (opts.planWeek && data.plan.length) {
+      const week = getWeek(opts.planWeek, true);
+      if (!week.archived) {
+        for (const p of data.plan) {
+          const recipe = byName.get(N.norm(p.name));
+          if (!recipe) continue;
+          slotList(week, p.day, p.meal).push({ uid: uid(), recipeId: recipe.id, servings: recipe.servings || 1 });
+          result.planned++;
+        }
+      }
+    }
+    save();
+    return result;
+  }
+
   /* ---------- Archiv ---------- */
   function snapshotRecipes(week) {
     const snap = {};
@@ -474,7 +583,9 @@ window.PF_STORE = (function () {
 
   /* ---------- Beispieldaten ---------- */
   function seed() {
-    const r = (name, category, color, servings, ingredients, instructions) => ({
+    const tags = DEFAULT_TAGS.map(([name, color]) => ({ id: uid(), name, color }));
+    const tagIds = (...names) => names.map((n) => tags.find((t) => t.name === n).id);
+    const r = (name, category, color, servings, ingredients, instructions, tagNames = []) => ({
       id: uid(),
       name,
       category,
@@ -482,35 +593,36 @@ window.PF_STORE = (function () {
       servings,
       ingredients: ingredients.map(([n, amount, unit]) => ({ name: n, amount, unit })),
       instructions,
+      tags: tagIds(...tagNames),
     });
     const recipes = [
       r('Overnight Oats mit Beeren', 'Frühstück', COLORS[2], 1, [
         ['Haferflocken', 60, 'g'], ['Milch', 150, 'g'], ['Joghurt', 80, 'g'], ['Heidelbeeren', 80, 'g'], ['Chiasamen', 10, 'g'], ['Honig', 10, 'g'],
-      ], 'Alles verrühren, über Nacht in den Kühlschrank stellen, morgens mit Beeren toppen.'),
+      ], 'Alles verrühren, über Nacht in den Kühlschrank stellen, morgens mit Beeren toppen.', ['Meal Prep', 'Schnell']),
       r('Rührei auf Vollkornbrot', 'Frühstück', COLORS[1], 1, [
         ['Ei', 2, 'Stück'], ['Vollkornbrot', 1, 'Stück'], ['Butter', 5, 'g'], ['Kirschtomaten', 5, 'Stück'],
-      ], 'Eier verquirlen, in Butter stocken lassen, auf Brot mit Tomaten servieren.'),
+      ], 'Eier verquirlen, in Butter stocken lassen, auf Brot mit Tomaten servieren.', ['Schnell', 'Günstig']),
       r('Spaghetti Bolognese', 'Hauptgericht', COLORS[0], 4, [
         ['Spaghetti', 400, 'g'], ['Rinderhackfleisch', 400, 'g'], ['Passierte Tomaten', 500, 'g'], ['Zwiebel', 1, 'Stück'],
         ['Knoblauch', 2, 'Stück'], ['Karotte', 1, 'Stück'], ['Olivenöl', 15, 'g'], ['Parmesan', 40, 'g'],
-      ], 'Zwiebel, Knoblauch und Karotte würfeln und anbraten, Hack dazu, mit Tomaten 30 Min. köcheln. Mit Nudeln und Parmesan servieren.'),
+      ], 'Zwiebel, Knoblauch und Karotte würfeln und anbraten, Hack dazu, mit Tomaten 30 Min. köcheln. Mit Nudeln und Parmesan servieren.', ['Meal Prep']),
       r('Hähnchen-Gemüse-Pfanne', 'Hauptgericht', COLORS[4], 2, [
         ['Hähnchenbrust', 300, 'g'], ['Paprika', 1, 'Stück'], ['Zucchini', 1, 'Stück'], ['Brokkoli', 200, 'g'],
         ['Reis', 150, 'g'], ['Olivenöl', 15, 'g'], ['Ingwer', 1, 'Stück'],
-      ], 'Reis kochen. Hähnchen in Streifen scharf anbraten, Gemüse dazu, mit Ingwer würzen.'),
+      ], 'Reis kochen. Hähnchen in Streifen scharf anbraten, Gemüse dazu, mit Ingwer würzen.', ['High Protein', 'Schnell']),
       r('Rotes Linsencurry', 'Hauptgericht', COLORS[8], 3, [
         ['Rote Linsen', 200, 'g'], ['Kokosmilch', 400, 'g'], ['Passierte Tomaten', 400, 'g'], ['Zwiebel', 1, 'Stück'],
         ['Knoblauch', 2, 'Stück'], ['Spinat', 150, 'g'], ['Reis', 180, 'g'],
-      ], 'Zwiebel und Knoblauch anschwitzen, Linsen, Tomaten und Kokosmilch 20 Min. köcheln, Spinat unterheben.'),
+      ], 'Zwiebel und Knoblauch anschwitzen, Linsen, Tomaten und Kokosmilch 20 Min. köcheln, Spinat unterheben.', ['Vegan', 'Meal Prep', 'Günstig']),
       r('Ofenlachs mit Kartoffeln', 'Hauptgericht', COLORS[6], 2, [
         ['Lachs', 2, 'Stück'], ['Kartoffeln', 500, 'g'], ['Brokkoli', 300, 'g'], ['Zitrone', 1, 'Stück'], ['Olivenöl', 20, 'g'],
-      ], 'Kartoffeln 20 Min. vorbacken, Lachs und Brokkoli dazu, weitere 15 Min. bei 200 °C.'),
+      ], 'Kartoffeln 20 Min. vorbacken, Lachs und Brokkoli dazu, weitere 15 Min. bei 200 °C.', ['High Protein', 'Low Carb']),
       r('Apfel mit Erdnussbutter', 'Snack', COLORS[3], 1, [
         ['Apfel', 1, 'Stück'], ['Erdnussbutter', 20, 'g'],
-      ], 'Apfel in Spalten schneiden und dippen.'),
+      ], 'Apfel in Spalten schneiden und dippen.', ['Schnell', 'Vegan']),
       r('Gemüsesticks & Hummus', 'Snack', COLORS[5], 1, [
         ['Karotte', 1, 'Stück'], ['Gurke', 0.5, 'Stück'], ['Hummus', 60, 'g'],
-      ], 'Gemüse in Sticks schneiden, mit Hummus servieren.'),
+      ], 'Gemüse in Sticks schneiden, mit Hummus servieren.', ['Schnell', 'Vegan', 'Low Carb']),
     ];
     const ingredients = {};
     for (const rec of recipes) {
@@ -519,13 +631,14 @@ window.PF_STORE = (function () {
         if (hit) ingredients[N.norm(ing.name)] = { name: ing.name, ...hit };
       }
     }
-    return { version: 1, recipes, ingredients, weeks: {}, settings: { usdaKey: '' } };
+    return { version: 1, recipes, tags, ingredients, weeks: {}, settings: { usdaKey: '' } };
   }
 
   return {
     MEALS,
     CATEGORIES,
     COLORS,
+    TAG_COLORS,
     DAY_NAMES,
     uid,
     isoDate,
@@ -568,6 +681,11 @@ window.PF_STORE = (function () {
     deleteWeek,
     archivedWeeks,
     copyWeek,
+    importData,
+    getTag,
+    addTag,
+    updateTag,
+    deleteTag,
     dayTotals,
   };
 })();

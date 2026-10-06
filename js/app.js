@@ -15,6 +15,7 @@
     tab: 'cards',
     search: '',
     detail: null, // { recipeId, entryUid }
+    tagFilter: new Set(), // aktive Tag-Filter (UND-verknüpft)
     drag: null, // { type: 'recipe'|'entry', id }
   };
 
@@ -48,6 +49,13 @@
   function macroLine(values) {
     const g = (k) => fmtNum(values[k] || 0);
     return `E ${g('protein')} g · KH ${g('carbs')} g · F ${g('fat')} g`;
+  }
+
+  function tagsOf(recipe) {
+    return (recipe.tags || []).map(S.getTag).filter(Boolean);
+  }
+  function tagPill(tag, extra = '') {
+    return `<span class="tag ${extra}" style="--t:${tag.color}">${esc(tag.name)}</span>`;
   }
 
   function infoFor(name) {
@@ -200,11 +208,15 @@
   function renderCards() {
     const inner = $('#cardboxInner');
     const q = N.norm(ui.search);
-    const recipes = S.state.recipes.filter(
-      (r) => !q || N.norm(r.name).includes(q) || r.ingredients.some((i) => N.norm(i.name).includes(q))
-    );
+    // gelöschte Tags aus dem Filter werfen
+    for (const id of ui.tagFilter) if (!S.getTag(id)) ui.tagFilter.delete(id);
+    const matchesSearch = (r) => !q || N.norm(r.name).includes(q) || r.ingredients.some((i) => N.norm(i.name).includes(q));
+    const matchesTags = (r) => [...ui.tagFilter].every((id) => (r.tags || []).includes(id));
+    const recipes = S.state.recipes.filter((r) => matchesSearch(r) && matchesTags(r));
+    renderTagFilter(S.state.recipes.filter(matchesSearch), recipes.length);
     if (!recipes.length) {
-      inner.innerHTML = `<div class="cardbox-empty">${q ? 'Kein Rezept gefunden.' : 'Noch keine Rezepte – leg dein erstes an!'}</div>`;
+      const filtered = q || ui.tagFilter.size;
+      inner.innerHTML = `<div class="cardbox-empty">${filtered ? 'Kein Rezept passt zu Suche/Filter.' : 'Noch keine Rezepte – leg dein erstes an!'}</div>`;
       return;
     }
     let html = '';
@@ -221,18 +233,42 @@
           <div class="rcard-body">
             <div class="rcard-meta">
               <span>${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}</span>
+              <span class="rcard-dots">${tagsOf(r)
+                .map((t) => `<i style="--t:${t.color}" title="${esc(t.name)}"></i>`)
+                .join('')}</span>
               ${kcal ? `<span class="kcal">${fmtNum(kcal)} kcal</span>` : ''}
             </div>
+            <div class="rcard-tags">${tagsOf(r).map((t) => tagPill(t, 'small')).join('')}</div>
             <ul class="rcard-ings">${r.ingredients
-              .slice(0, 5)
+              .slice(0, 4)
               .map((ing) => `<li><span>${esc(ing.name)}</span><span>${fmtAmount(ing.amount, ing.unit)}</span></li>`)
-              .join('')}${r.ingredients.length > 5 ? `<li class="more">+ ${r.ingredients.length - 5} weitere</li>` : ''}</ul>
+              .join('')}${r.ingredients.length > 4 ? `<li class="more">+ ${r.ingredients.length - 4} weitere</li>` : ''}</ul>
             ${kcal ? `<div class="rcard-macros">pro Portion: ${macroLine(per.values)}</div>` : ''}
           </div>
         </article>`;
       });
     }
     inner.innerHTML = html;
+  }
+
+  /** Filterleiste über der Kartei: Tags als farbige Chips mit Trefferanzahl. */
+  function renderTagFilter(pool, shown) {
+    const bar = $('#tagFilter');
+    if (!S.state.tags.length) {
+      bar.innerHTML = '';
+      return;
+    }
+    bar.innerHTML =
+      S.state.tags
+        .map((t) => {
+          const on = ui.tagFilter.has(t.id);
+          const count = pool.filter((r) => (r.tags || []).includes(t.id)).length;
+          return `<button class="tag filter${on ? ' active' : ''}" data-tag="${t.id}" style="--t:${t.color}" aria-pressed="${on}">${esc(t.name)}<span class="tag-count">${count}</span></button>`;
+        })
+        .join('') +
+      (ui.tagFilter.size
+        ? `<button class="tag-reset" data-tag-reset>✕ Filter (${shown})</button>`
+        : '');
   }
 
   /* ================= Einkaufsliste ================= */
@@ -390,6 +426,7 @@
         <div>
           <span class="detail-cat">${esc(recipe.category || 'Sonstiges')}</span>
           <h2>${esc(recipe.name)}</h2>
+          ${tagsOf(recipe).length ? `<div class="detail-tags">${tagsOf(recipe).map((t) => tagPill(t)).join('')}</div>` : ''}
           <span class="muted">Rezept für ${recipe.servings} ${recipe.servings === 1 ? 'Portion' : 'Portionen'}</span>
         </div>
         <button class="icon-btn" data-close aria-label="Schließen">✕</button>
@@ -539,7 +576,9 @@
           servings: 2,
           ingredients: [{ name: '', amount: '', unit: 'g' }],
           instructions: '',
+          tags: [],
         };
+    editor.recipe.tags ||= [];
     $('#editorTitle').textContent = editor.isNew ? 'Neues Rezept' : 'Rezept bearbeiten';
     form.name.value = editor.recipe.name;
     form.category.innerHTML = S.CATEGORIES.map((c) => `<option ${c === editor.recipe.category ? 'selected' : ''}>${c}</option>`).join('');
@@ -547,6 +586,7 @@
     form.instructions.value = editor.recipe.instructions || '';
     $('#ingredientNames').innerHTML = S.knownIngredientNames().map((n) => `<option value="${esc(n)}">`).join('');
     renderSwatches();
+    renderTagPicker();
     renderIngTable();
     renderEditorNutri();
     openDialog(dlg);
@@ -558,6 +598,20 @@
       (c) =>
         `<button type="button" class="swatch${c === editor.recipe.color ? ' active' : ''}" data-color="${c}" style="--c:${c}" aria-label="Farbe ${c}"></button>`
     ).join('');
+  }
+
+  function renderTagPicker() {
+    const sel = editor.recipe.tags;
+    $('#tagPicker').innerHTML =
+      S.state.tags
+        .map(
+          (t) =>
+            `<button type="button" class="tag pick${sel.includes(t.id) ? ' active' : ''}" data-tag="${t.id}" style="--t:${t.color}" aria-pressed="${sel.includes(t.id)}">${
+              sel.includes(t.id) ? '✓ ' : ''
+            }${esc(t.name)}</button>`
+        )
+        .join('') +
+      `<input class="tag-new" placeholder="＋ neuer Tag" aria-label="Neuen Tag anlegen" maxlength="24" />`;
   }
 
   function ingStatus(ing) {
@@ -634,6 +688,14 @@
   });
 
   $('#editorForm').addEventListener('click', (ev) => {
+    const tagBtn = ev.target.closest('.tag.pick');
+    if (tagBtn) {
+      const id = tagBtn.dataset.tag;
+      const tags = editor.recipe.tags;
+      editor.recipe.tags = tags.includes(id) ? tags.filter((t) => t !== id) : [...tags, id];
+      renderTagPicker();
+      return;
+    }
     const sw = ev.target.closest('.swatch');
     if (sw) {
       editor.recipe.color = sw.dataset.color;
@@ -656,6 +718,16 @@
         renderEditorNutri();
       }, ing.unit);
     }
+  });
+
+  // neuen Tag direkt im Editor anlegen (Enter)
+  $('#editorForm').addEventListener('keydown', (ev) => {
+    if (!ev.target.matches('.tag-new') || ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const tag = S.addTag(ev.target.value);
+    if (tag && !editor.recipe.tags.includes(tag.id)) editor.recipe.tags.push(tag.id);
+    renderTagPicker();
+    $('#tagPicker .tag-new').focus();
   });
 
   $('#addIngBtn').addEventListener('click', () => {
@@ -905,6 +977,153 @@
     return start;
   }
 
+  /* ================= Excel-Import ================= */
+  function openImport() {
+    const dlg = $('#importDialog');
+    let parsed = null;
+    const target = isReadOnly() ? nextOpenWeek() : ui.viewStart;
+
+    const renderStart = (msg = '') => {
+      dlg.innerHTML = `<header class="dialog-head"><div><h2>📥 Rezepte aus Excel importieren</h2>
+          <span class="muted">.xlsx, .xls, .ods oder .csv – wird nur in deinem Browser gelesen</span></div>
+          <button class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+        <div class="dialog-body">
+          <label class="dropzone" id="importDrop">
+            <input type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv" hidden data-act="file" />
+            <span class="dropzone-icon">📄</span>
+            <strong>Datei auswählen oder hierher ziehen</strong>
+            <span class="muted small">${msg ? esc(msg) : 'Mehrere Blätter werden automatisch erkannt.'}</span>
+          </label>
+          <h3>So muss die Tabelle aussehen</h3>
+          <p class="small">Eine Zeile pro Zutat, Überschriften in einer Zeile (Reihenfolge egal):</p>
+          <table class="nutri-table import-format">
+            <thead><tr><th>Gericht</th><th>Zutat</th><th>Menge</th><th>Einheit</th><th class="muted">Zubereitung</th></tr></thead>
+            <tbody>
+              <tr><td>Linsencurry</td><td>Rote Linsen</td><td>200</td><td>g</td><td class="muted">Zwiebel anschwitzen …</td></tr>
+              <tr><td>Linsencurry</td><td>Zwiebel</td><td>1</td><td>Stück</td><td></td></tr>
+            </tbody>
+          </table>
+          <p class="muted small">Optional erkannt: <b>Tag</b> &amp; <b>Mahlzeit</b> (→ Wochenplan), <b>Portionen</b>, <b>Kategorie</b>,
+            Nährwert-Spalten (kcal, Protein, Fett, KH) sowie ein eigenes Blatt mit <b>Zutat + Nährwerten pro 100 g</b>.
+            Einheiten: g, kg, Stück; ml/l werden 1:1 als g, EL/TL als 15/5 g übernommen.</p>
+          <button class="btn btn-sm" data-act="template">⬇ Vorlage herunterladen</button>
+        </div>`;
+    };
+
+    const renderPreview = () => {
+      const { recipes, nutrition, plan, warnings } = parsed;
+      const nutriMap = new Map(nutrition.map((n) => [N.norm(n.name), n]));
+      const kcalOf = (r) => {
+        let kcal = 0;
+        for (const ing of r.ingredients) {
+          const info = nutriMap.get(N.norm(ing.name)) || infoFor(ing.name);
+          const g = info && N.gramsOf(ing.amount, ing.unit, info);
+          if (g != null && info.nutrients.kcal != null) kcal += (info.nutrients.kcal * g) / 100;
+        }
+        return kcal / (r.servings || 1);
+      };
+      const exists = (r) => S.state.recipes.some((x) => N.norm(x.name) === N.norm(r.name));
+      const dupes = recipes.filter(exists).length;
+      dlg.innerHTML = `<form method="dialog">
+        <header class="dialog-head"><div><h2>📥 Import-Vorschau</h2>
+          <span class="muted">${recipes.length} Rezepte · ${nutrition.length} Zutaten mit Nährwerten${plan.length ? ` · ${plan.length} geplante Mahlzeiten` : ''}</span></div>
+          <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+        <div class="dialog-body">
+          ${warnings.length ? `<ul class="import-warn">${warnings.map((w) => `<li>⚠ ${esc(w)}</li>`).join('')}</ul>` : ''}
+          <ul class="import-list">
+            ${recipes
+              .map(
+                (r) => `<li>
+                <div><strong>${esc(r.name)}</strong>${exists(r) ? ' <span class="chip">schon vorhanden</span>' : ''}
+                  ${r.tags && r.tags.length ? `<div class="detail-tags">${r.tags.map((n) => tagPill(S.state.tags.find((t) => N.norm(t.name) === N.norm(n)) || { name: n, color: 'var(--muted)' }, 'small')).join('')}</div>` : ''}
+                  <div class="muted small">${esc(r.category)} · ${r.ingredients.length} Zutaten · ${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}${r.instructions ? ' · mit Zubereitung' : ''}</div></div>
+                <span class="import-kcal">${fmtNum(kcalOf(r))} kcal</span>
+              </li>`
+              )
+              .join('')}
+          </ul>
+          ${
+            dupes
+              ? `<label class="check-row"><input type="checkbox" name="overwrite" checked /> ${dupes} schon vorhandene Rezepte mit den Daten aus der Datei aktualisieren</label>`
+              : ''
+          }
+          ${
+            plan.length
+              ? `<label class="check-row"><input type="checkbox" name="plan" /> Wochenplan aus der Datei in <b>${weekLabel(target).kw}</b> (${weekLabel(target).range}) eintragen</label>`
+              : ''
+          }
+        </div>
+        <footer class="dialog-foot">
+          <button type="button" class="btn" data-act="back">Andere Datei</button>
+          <button class="btn btn-primary" ${recipes.length ? '' : 'disabled'}>${recipes.length} Rezepte importieren</button>
+        </footer>
+      </form>`;
+      $('form', dlg).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const res = S.importData(parsed, {
+          overwrite: f.overwrite ? f.overwrite.checked : false,
+          planWeek: f.plan && f.plan.checked ? target : null,
+        });
+        dlg.close();
+        if (res.planned) ui.viewStart = target;
+        renderAll();
+        toast(
+          `${res.created} neu, ${res.updated} aktualisiert${res.skipped ? `, ${res.skipped} übersprungen` : ''}` +
+            (res.planned ? ` · ${res.planned} Mahlzeiten eingeplant` : '')
+        );
+      });
+    };
+
+    const handleFile = async (file) => {
+      if (!file) return;
+      renderStart('Lese ' + file.name + ' …');
+      try {
+        parsed = await window.PF_IMPORT.parseFile(file);
+        if (!parsed.recipes.length) {
+          renderStart('Keine Rezepte gefunden – gibt es Spalten „Gericht“, „Zutat“ und „Menge“?');
+          return;
+        }
+        renderPreview();
+      } catch (e) {
+        renderStart('Fehler: ' + e.message);
+      }
+    };
+
+    dlg.onchange = (ev) => {
+      if (ev.target.matches('[data-act="file"]')) handleFile(ev.target.files[0]);
+    };
+    dlg.onclick = async (ev) => {
+      const act = ev.target.closest('[data-act]');
+      if (!act) return;
+      if (act.dataset.act === 'back') renderStart();
+      if (act.dataset.act === 'template') {
+        try {
+          await window.PF_IMPORT.downloadTemplate();
+        } catch (e) {
+          toast(e.message);
+        }
+      }
+    };
+    dlg.ondragover = (ev) => {
+      ev.preventDefault();
+      const z = $('#importDrop', dlg);
+      if (z) z.classList.add('over');
+    };
+    dlg.ondragleave = () => {
+      const z = $('#importDrop', dlg);
+      if (z) z.classList.remove('over');
+    };
+    dlg.ondrop = (ev) => {
+      ev.preventDefault();
+      handleFile(ev.dataTransfer.files[0]);
+    };
+
+    renderStart();
+    openDialog(dlg);
+    window.PF_IMPORT.loadLib().catch(() => {}); // schon mal vorladen
+  }
+
   /* ================= Einstellungen ================= */
   function openSettings() {
     const dlg = $('#settingsDialog');
@@ -916,17 +1135,36 @@
           <input name="usdaKey" value="${esc(S.state.settings.usdaKey || '')}" placeholder="leer = DEMO_KEY (stark limitiert)" />
           <small class="muted">Kostenlos unter <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">fdc.nal.usda.gov/api-key-signup</a>. Wird nur in deinem Browser gespeichert.</small>
         </label>
+        <div class="field"><span>Tags verwalten</span>
+          <p class="muted small">Farbe antippen zum Ändern, Name direkt bearbeiten. Löschen entfernt den Tag auch aus allen Rezepten.</p>
+          <div class="tag-manager" id="tagManager"></div>
+        </div>
         <div class="field"><span>Daten</span>
           <p class="muted small">Alle Daten liegen lokal in diesem Browser. Für Backup oder Umzug auf ein anderes Gerät exportieren/importieren.</p>
           <div class="row-btns">
             <button type="button" class="btn" data-act="export">⬇ Export (JSON)</button>
             <label class="btn">⬆ Import<input type="file" accept="application/json,.json" hidden data-act="import" /></label>
+            <button type="button" class="btn" data-act="excel">📥 Rezepte aus Excel</button>
             <button type="button" class="btn btn-ghost danger" data-act="reset">Alles zurücksetzen</button>
           </div>
         </div>
       </div>
       <footer class="dialog-foot"><button type="button" class="btn" data-close>Abbrechen</button><button class="btn btn-primary">Speichern</button></footer>
     </form>`;
+    const renderTagManager = () => {
+      $('#tagManager', dlg).innerHTML =
+        S.state.tags
+          .map(
+            (t) => `<div class="tm-row" data-id="${t.id}">
+              <input type="color" value="${t.color}" data-tm="color" aria-label="Farbe von ${esc(t.name)}" />
+              <input value="${esc(t.name)}" data-tm="name" aria-label="Name" maxlength="24" />
+              <span class="muted small">${S.state.recipes.filter((r) => (r.tags || []).includes(t.id)).length} Rezepte</span>
+              <button type="button" class="icon-btn small" data-tm="delete" aria-label="Tag löschen">✕</button>
+            </div>`
+          )
+          .join('') +
+        `<div class="tm-row"><input class="tag-new" data-tm="new" placeholder="＋ neuer Tag, Enter" maxlength="24" /></div>`;
+    };
     const form = $('form', dlg);
     form.addEventListener('submit', (ev) => {
       ev.preventDefault();
@@ -945,6 +1183,9 @@
         a.download = `planfood-${S.isoDate(new Date())}.json`;
         a.click();
         URL.revokeObjectURL(a.href);
+      } else if (act.dataset.act === 'excel') {
+        dlg.close();
+        openImport();
       } else if (act.dataset.act === 'reset') {
         if (confirm('Wirklich alle Rezepte, Pläne und das Archiv löschen und mit Beispieldaten neu starten?')) {
           S.reset();
@@ -953,6 +1194,30 @@
         }
       }
     };
+    const tm = $('#tagManager', dlg);
+    tm.addEventListener('change', (ev) => {
+      const row = ev.target.closest('[data-id]');
+      if (!row) return;
+      if (ev.target.dataset.tm === 'color') S.updateTag(row.dataset.id, { color: ev.target.value });
+      if (ev.target.dataset.tm === 'name') S.updateTag(row.dataset.id, { name: ev.target.value });
+    });
+    tm.addEventListener('click', (ev) => {
+      const del = ev.target.closest('[data-tm="delete"]');
+      if (!del) return;
+      const id = del.closest('[data-id]').dataset.id;
+      const tag = S.getTag(id);
+      if (confirm(`Tag „${tag.name}“ löschen?`)) {
+        S.deleteTag(id);
+        renderTagManager();
+      }
+    });
+    tm.addEventListener('keydown', (ev) => {
+      if (ev.target.dataset.tm !== 'new' || ev.key !== 'Enter') return;
+      ev.preventDefault();
+      if (S.addTag(ev.target.value)) renderTagManager();
+      $('[data-tm="new"]', dlg).focus();
+    });
+    renderTagManager();
     $('[data-act="import"]', dlg).addEventListener('change', async (ev) => {
       const file = ev.target.files[0];
       if (!file) return;
@@ -1052,6 +1317,16 @@
     });
     $('#settingsBtn').addEventListener('click', openSettings);
     $('#newRecipeBtn').addEventListener('click', () => openEditor());
+    $('#importBtn').addEventListener('click', openImport);
+    $('#tagFilter').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-tag]');
+      if (b) {
+        const id = b.dataset.tag;
+        ui.tagFilter.has(id) ? ui.tagFilter.delete(id) : ui.tagFilter.add(id);
+      } else if (ev.target.closest('[data-tag-reset]')) ui.tagFilter.clear();
+      else return;
+      renderCards();
+    });
     $('#recipeSearch').addEventListener('input', (ev) => {
       ui.search = ev.target.value;
       renderCards();
@@ -1076,6 +1351,21 @@
     $('#cardboxInner').addEventListener('click', (ev) => {
       const card = ev.target.closest('.rcard');
       if (card) openDetail(card.dataset.id);
+    });
+    // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
+    const setLift = (card) => {
+      // offsetTop ignoriert Transformationen → Position der Karte im Ruhezustand
+      const inner = $('#cardboxInner');
+      const avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
+      card.style.setProperty('--lift', Math.max(0, Math.min(118, avail)) + 'px');
+    };
+    $('#cardboxInner').addEventListener('mouseover', (ev) => {
+      const card = ev.target.closest('.rcard');
+      if (card) setLift(card);
+    });
+    $('#cardboxInner').addEventListener('focusin', (ev) => {
+      const card = ev.target.closest('.rcard');
+      if (card) setLift(card);
     });
     $('#cardboxInner').addEventListener('keydown', (ev) => {
       const card = ev.target.closest('.rcard');

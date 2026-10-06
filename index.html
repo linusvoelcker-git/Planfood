@@ -59,8 +59,10 @@
       <div class="side-panel" id="panel-cards">
         <div class="cards-toolbar">
           <input type="search" id="recipeSearch" placeholder="Rezept suchen …" aria-label="Rezept suchen" />
+          <button class="icon-btn" id="importBtn" title="Rezepte aus Excel importieren" aria-label="Rezepte aus Excel importieren">📥</button>
           <button class="btn btn-primary btn-sm" id="newRecipeBtn">＋ Neues Rezept</button>
         </div>
+        <div class="tag-filter" id="tagFilter" aria-label="Nach Tags filtern"></div>
         <div class="cardbox" id="cardbox">
           <div class="cardbox-inner" id="cardboxInner"></div>
         </div>
@@ -106,6 +108,11 @@
         </div>
 
         <div class="field">
+          <span>Tags</span>
+          <div class="tag-picker" id="tagPicker"></div>
+        </div>
+
+        <div class="field">
           <span>Zutaten <small>(Mengen in Gramm oder Stück)</small></span>
           <div class="ing-table" id="ingTable"></div>
           <button type="button" class="btn btn-ghost btn-sm" id="addIngBtn">＋ Zutat hinzufügen</button>
@@ -132,6 +139,9 @@
   <!-- Archiv -->
   <dialog id="archiveDialog" class="dialog dialog-wide"></dialog>
 
+  <!-- Excel-Import -->
+  <dialog id="importDialog" class="dialog dialog-wide"></dialog>
+
   <!-- Einstellungen -->
   <dialog id="settingsDialog" class="dialog"></dialog>
 
@@ -143,6 +153,7 @@
   <script src="js/foods.js"></script>
   <script src="js/nutrition.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/importer.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
