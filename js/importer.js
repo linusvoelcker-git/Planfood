@@ -34,6 +34,7 @@ window.PF_IMPORT = (function () {
     meal: /^mahlzeit/,
     servings: /^portion/,
     category: /^kategorie/,
+    tags: /^(tags?|schlagw|labels?)\b/,
     instructions: /zubereitung|anleitung|anweisung|beschreibung/,
     kcal: /kcal|energie|kalorien/,
     protein: /protein|eiweiß|eiweiss/,
@@ -141,6 +142,7 @@ window.PF_IMPORT = (function () {
               servings: block.servings || 1,
               ingredients: block.ingredients,
               instructions: block.instructions || '',
+              tags: block.tags || [],
             });
           }
           if (block.day != null && block.meal) plan.push({ day: block.day, meal: block.meal, name: block.name });
@@ -161,12 +163,14 @@ window.PF_IMPORT = (function () {
         if (!name) continue;
         if (!block || N.norm(block.name) !== N.norm(name) || (day != null && day !== block.day) || (meal && meal !== block.meal)) {
           finishBlock();
-          block = { name, day, meal, ingredients: [], instructions: '', servings: null, category: null };
+          block = { name, day, meal, ingredients: [], instructions: '', servings: null, category: null, tags: null };
         }
         const instr = get(row, 'instructions');
         if (instr && !block.instructions) block.instructions = String(instr).trim();
         const servings = num(get(row, 'servings'));
         if (servings && !block.servings) block.servings = Math.max(1, Math.round(servings));
+        const tags = get(row, 'tags');
+        if (tags && !block.tags) block.tags = String(tags).split(/[,;|]/).map(cleanName).filter(Boolean);
         const category = get(row, 'category');
         if (category && !block.category) block.category = matchCategory(category);
 
@@ -236,14 +240,14 @@ window.PF_IMPORT = (function () {
     const XLSX = await loadLib();
     const wb = XLSX.utils.book_new();
     const recipes = XLSX.utils.aoa_to_sheet([
-      ['Gericht', 'Kategorie', 'Portionen', 'Zutat', 'Menge', 'Einheit', 'Zubereitung'],
-      ['Overnight Oats', 'Frühstück', 1, 'Haferflocken', 60, 'g', 'Alles verrühren und über Nacht kühlen.'],
-      ['Overnight Oats', 'Frühstück', 1, 'Milch', 150, 'g', ''],
-      ['Overnight Oats', 'Frühstück', 1, 'Banane', 1, 'Stück', ''],
+      ['Gericht', 'Kategorie', 'Tags', 'Portionen', 'Zutat', 'Menge', 'Einheit', 'Zubereitung'],
+      ['Overnight Oats', 'Frühstück', 'Schnell, Meal Prep', 1, 'Haferflocken', 60, 'g', 'Alles verrühren und über Nacht kühlen.'],
+      ['Overnight Oats', 'Frühstück', '', 1, 'Milch', 150, 'g', ''],
+      ['Overnight Oats', 'Frühstück', '', 1, 'Banane', 1, 'Stück', ''],
       [],
-      ['Linsencurry', 'Hauptgericht', 3, 'Rote Linsen', 200, 'g', 'Zwiebel anschwitzen, Linsen und Kokosmilch 20 Min. köcheln.'],
-      ['Linsencurry', 'Hauptgericht', 3, 'Kokosmilch', 400, 'ml', ''],
-      ['Linsencurry', 'Hauptgericht', 3, 'Zwiebel', 1, 'Stück', ''],
+      ['Linsencurry', 'Hauptgericht', 'Vegan, Günstig', 3, 'Rote Linsen', 200, 'g', 'Zwiebel anschwitzen, Linsen und Kokosmilch 20 Min. köcheln.'],
+      ['Linsencurry', 'Hauptgericht', '', 3, 'Kokosmilch', 400, 'ml', ''],
+      ['Linsencurry', 'Hauptgericht', '', 3, 'Zwiebel', 1, 'Stück', ''],
     ]);
     const nutri = XLSX.utils.aoa_to_sheet([
       ['Zutat', 'kcal', 'Protein', 'Fett', 'Kohlenhydrate', 'Ballaststoffe'],

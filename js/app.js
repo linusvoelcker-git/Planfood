@@ -15,6 +15,7 @@
     tab: 'cards',
     search: '',
     detail: null, // { recipeId, entryUid }
+    tagFilter: new Set(), // aktive Tag-Filter (UND-verknüpft)
     drag: null, // { type: 'recipe'|'entry', id }
   };
 
@@ -48,6 +49,13 @@
   function macroLine(values) {
     const g = (k) => fmtNum(values[k] || 0);
     return `E ${g('protein')} g · KH ${g('carbs')} g · F ${g('fat')} g`;
+  }
+
+  function tagsOf(recipe) {
+    return (recipe.tags || []).map(S.getTag).filter(Boolean);
+  }
+  function tagPill(tag, extra = '') {
+    return `<span class="tag ${extra}" style="--t:${tag.color}">${esc(tag.name)}</span>`;
   }
 
   function infoFor(name) {
@@ -200,11 +208,15 @@
   function renderCards() {
     const inner = $('#cardboxInner');
     const q = N.norm(ui.search);
-    const recipes = S.state.recipes.filter(
-      (r) => !q || N.norm(r.name).includes(q) || r.ingredients.some((i) => N.norm(i.name).includes(q))
-    );
+    // gelöschte Tags aus dem Filter werfen
+    for (const id of ui.tagFilter) if (!S.getTag(id)) ui.tagFilter.delete(id);
+    const matchesSearch = (r) => !q || N.norm(r.name).includes(q) || r.ingredients.some((i) => N.norm(i.name).includes(q));
+    const matchesTags = (r) => [...ui.tagFilter].every((id) => (r.tags || []).includes(id));
+    const recipes = S.state.recipes.filter((r) => matchesSearch(r) && matchesTags(r));
+    renderTagFilter(S.state.recipes.filter(matchesSearch), recipes.length);
     if (!recipes.length) {
-      inner.innerHTML = `<div class="cardbox-empty">${q ? 'Kein Rezept gefunden.' : 'Noch keine Rezepte – leg dein erstes an!'}</div>`;
+      const filtered = q || ui.tagFilter.size;
+      inner.innerHTML = `<div class="cardbox-empty">${filtered ? 'Kein Rezept passt zu Suche/Filter.' : 'Noch keine Rezepte – leg dein erstes an!'}</div>`;
       return;
     }
     let html = '';
@@ -221,18 +233,42 @@
           <div class="rcard-body">
             <div class="rcard-meta">
               <span>${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}</span>
+              <span class="rcard-dots">${tagsOf(r)
+                .map((t) => `<i style="--t:${t.color}" title="${esc(t.name)}"></i>`)
+                .join('')}</span>
               ${kcal ? `<span class="kcal">${fmtNum(kcal)} kcal</span>` : ''}
             </div>
+            <div class="rcard-tags">${tagsOf(r).map((t) => tagPill(t, 'small')).join('')}</div>
             <ul class="rcard-ings">${r.ingredients
-              .slice(0, 5)
+              .slice(0, 4)
               .map((ing) => `<li><span>${esc(ing.name)}</span><span>${fmtAmount(ing.amount, ing.unit)}</span></li>`)
-              .join('')}${r.ingredients.length > 5 ? `<li class="more">+ ${r.ingredients.length - 5} weitere</li>` : ''}</ul>
+              .join('')}${r.ingredients.length > 4 ? `<li class="more">+ ${r.ingredients.length - 4} weitere</li>` : ''}</ul>
             ${kcal ? `<div class="rcard-macros">pro Portion: ${macroLine(per.values)}</div>` : ''}
           </div>
         </article>`;
       });
     }
     inner.innerHTML = html;
+  }
+
+  /** Filterleiste über der Kartei: Tags als farbige Chips mit Trefferanzahl. */
+  function renderTagFilter(pool, shown) {
+    const bar = $('#tagFilter');
+    if (!S.state.tags.length) {
+      bar.innerHTML = '';
+      return;
+    }
+    bar.innerHTML =
+      S.state.tags
+        .map((t) => {
+          const on = ui.tagFilter.has(t.id);
+          const count = pool.filter((r) => (r.tags || []).includes(t.id)).length;
+          return `<button class="tag filter${on ? ' active' : ''}" data-tag="${t.id}" style="--t:${t.color}" aria-pressed="${on}">${esc(t.name)}<span class="tag-count">${count}</span></button>`;
+        })
+        .join('') +
+      (ui.tagFilter.size
+        ? `<button class="tag-reset" data-tag-reset>✕ Filter (${shown})</button>`
+        : '');
   }
 
   /* ================= Einkaufsliste ================= */
@@ -390,6 +426,7 @@
         <div>
           <span class="detail-cat">${esc(recipe.category || 'Sonstiges')}</span>
           <h2>${esc(recipe.name)}</h2>
+          ${tagsOf(recipe).length ? `<div class="detail-tags">${tagsOf(recipe).map((t) => tagPill(t)).join('')}</div>` : ''}
           <span class="muted">Rezept für ${recipe.servings} ${recipe.servings === 1 ? 'Portion' : 'Portionen'}</span>
         </div>
         <button class="icon-btn" data-close aria-label="Schließen">✕</button>
@@ -539,7 +576,9 @@
           servings: 2,
           ingredients: [{ name: '', amount: '', unit: 'g' }],
           instructions: '',
+          tags: [],
         };
+    editor.recipe.tags ||= [];
     $('#editorTitle').textContent = editor.isNew ? 'Neues Rezept' : 'Rezept bearbeiten';
     form.name.value = editor.recipe.name;
     form.category.innerHTML = S.CATEGORIES.map((c) => `<option ${c === editor.recipe.category ? 'selected' : ''}>${c}</option>`).join('');
@@ -547,6 +586,7 @@
     form.instructions.value = editor.recipe.instructions || '';
     $('#ingredientNames').innerHTML = S.knownIngredientNames().map((n) => `<option value="${esc(n)}">`).join('');
     renderSwatches();
+    renderTagPicker();
     renderIngTable();
     renderEditorNutri();
     openDialog(dlg);
@@ -558,6 +598,20 @@
       (c) =>
         `<button type="button" class="swatch${c === editor.recipe.color ? ' active' : ''}" data-color="${c}" style="--c:${c}" aria-label="Farbe ${c}"></button>`
     ).join('');
+  }
+
+  function renderTagPicker() {
+    const sel = editor.recipe.tags;
+    $('#tagPicker').innerHTML =
+      S.state.tags
+        .map(
+          (t) =>
+            `<button type="button" class="tag pick${sel.includes(t.id) ? ' active' : ''}" data-tag="${t.id}" style="--t:${t.color}" aria-pressed="${sel.includes(t.id)}">${
+              sel.includes(t.id) ? '✓ ' : ''
+            }${esc(t.name)}</button>`
+        )
+        .join('') +
+      `<input class="tag-new" placeholder="＋ neuer Tag" aria-label="Neuen Tag anlegen" maxlength="24" />`;
   }
 
   function ingStatus(ing) {
@@ -634,6 +688,14 @@
   });
 
   $('#editorForm').addEventListener('click', (ev) => {
+    const tagBtn = ev.target.closest('.tag.pick');
+    if (tagBtn) {
+      const id = tagBtn.dataset.tag;
+      const tags = editor.recipe.tags;
+      editor.recipe.tags = tags.includes(id) ? tags.filter((t) => t !== id) : [...tags, id];
+      renderTagPicker();
+      return;
+    }
     const sw = ev.target.closest('.swatch');
     if (sw) {
       editor.recipe.color = sw.dataset.color;
@@ -656,6 +718,16 @@
         renderEditorNutri();
       }, ing.unit);
     }
+  });
+
+  // neuen Tag direkt im Editor anlegen (Enter)
+  $('#editorForm').addEventListener('keydown', (ev) => {
+    if (!ev.target.matches('.tag-new') || ev.key !== 'Enter') return;
+    ev.preventDefault();
+    const tag = S.addTag(ev.target.value);
+    if (tag && !editor.recipe.tags.includes(tag.id)) editor.recipe.tags.push(tag.id);
+    renderTagPicker();
+    $('#tagPicker .tag-new').focus();
   });
 
   $('#addIngBtn').addEventListener('click', () => {
@@ -963,6 +1035,7 @@
               .map(
                 (r) => `<li>
                 <div><strong>${esc(r.name)}</strong>${exists(r) ? ' <span class="chip">schon vorhanden</span>' : ''}
+                  ${r.tags && r.tags.length ? `<div class="detail-tags">${r.tags.map((n) => tagPill(S.state.tags.find((t) => N.norm(t.name) === N.norm(n)) || { name: n, color: 'var(--muted)' }, 'small')).join('')}</div>` : ''}
                   <div class="muted small">${esc(r.category)} · ${r.ingredients.length} Zutaten · ${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}${r.instructions ? ' · mit Zubereitung' : ''}</div></div>
                 <span class="import-kcal">${fmtNum(kcalOf(r))} kcal</span>
               </li>`
@@ -1062,6 +1135,10 @@
           <input name="usdaKey" value="${esc(S.state.settings.usdaKey || '')}" placeholder="leer = DEMO_KEY (stark limitiert)" />
           <small class="muted">Kostenlos unter <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">fdc.nal.usda.gov/api-key-signup</a>. Wird nur in deinem Browser gespeichert.</small>
         </label>
+        <div class="field"><span>Tags verwalten</span>
+          <p class="muted small">Farbe antippen zum Ändern, Name direkt bearbeiten. Löschen entfernt den Tag auch aus allen Rezepten.</p>
+          <div class="tag-manager" id="tagManager"></div>
+        </div>
         <div class="field"><span>Daten</span>
           <p class="muted small">Alle Daten liegen lokal in diesem Browser. Für Backup oder Umzug auf ein anderes Gerät exportieren/importieren.</p>
           <div class="row-btns">
@@ -1074,6 +1151,20 @@
       </div>
       <footer class="dialog-foot"><button type="button" class="btn" data-close>Abbrechen</button><button class="btn btn-primary">Speichern</button></footer>
     </form>`;
+    const renderTagManager = () => {
+      $('#tagManager', dlg).innerHTML =
+        S.state.tags
+          .map(
+            (t) => `<div class="tm-row" data-id="${t.id}">
+              <input type="color" value="${t.color}" data-tm="color" aria-label="Farbe von ${esc(t.name)}" />
+              <input value="${esc(t.name)}" data-tm="name" aria-label="Name" maxlength="24" />
+              <span class="muted small">${S.state.recipes.filter((r) => (r.tags || []).includes(t.id)).length} Rezepte</span>
+              <button type="button" class="icon-btn small" data-tm="delete" aria-label="Tag löschen">✕</button>
+            </div>`
+          )
+          .join('') +
+        `<div class="tm-row"><input class="tag-new" data-tm="new" placeholder="＋ neuer Tag, Enter" maxlength="24" /></div>`;
+    };
     const form = $('form', dlg);
     form.addEventListener('submit', (ev) => {
       ev.preventDefault();
@@ -1103,6 +1194,30 @@
         }
       }
     };
+    const tm = $('#tagManager', dlg);
+    tm.addEventListener('change', (ev) => {
+      const row = ev.target.closest('[data-id]');
+      if (!row) return;
+      if (ev.target.dataset.tm === 'color') S.updateTag(row.dataset.id, { color: ev.target.value });
+      if (ev.target.dataset.tm === 'name') S.updateTag(row.dataset.id, { name: ev.target.value });
+    });
+    tm.addEventListener('click', (ev) => {
+      const del = ev.target.closest('[data-tm="delete"]');
+      if (!del) return;
+      const id = del.closest('[data-id]').dataset.id;
+      const tag = S.getTag(id);
+      if (confirm(`Tag „${tag.name}“ löschen?`)) {
+        S.deleteTag(id);
+        renderTagManager();
+      }
+    });
+    tm.addEventListener('keydown', (ev) => {
+      if (ev.target.dataset.tm !== 'new' || ev.key !== 'Enter') return;
+      ev.preventDefault();
+      if (S.addTag(ev.target.value)) renderTagManager();
+      $('[data-tm="new"]', dlg).focus();
+    });
+    renderTagManager();
     $('[data-act="import"]', dlg).addEventListener('change', async (ev) => {
       const file = ev.target.files[0];
       if (!file) return;
@@ -1203,6 +1318,15 @@
     $('#settingsBtn').addEventListener('click', openSettings);
     $('#newRecipeBtn').addEventListener('click', () => openEditor());
     $('#importBtn').addEventListener('click', openImport);
+    $('#tagFilter').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-tag]');
+      if (b) {
+        const id = b.dataset.tag;
+        ui.tagFilter.has(id) ? ui.tagFilter.delete(id) : ui.tagFilter.add(id);
+      } else if (ev.target.closest('[data-tag-reset]')) ui.tagFilter.clear();
+      else return;
+      renderCards();
+    });
     $('#recipeSearch').addEventListener('input', (ev) => {
       ui.search = ev.target.value;
       renderCards();
@@ -1227,6 +1351,21 @@
     $('#cardboxInner').addEventListener('click', (ev) => {
       const card = ev.target.closest('.rcard');
       if (card) openDetail(card.dataset.id);
+    });
+    // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
+    const setLift = (card) => {
+      // offsetTop ignoriert Transformationen → Position der Karte im Ruhezustand
+      const inner = $('#cardboxInner');
+      const avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
+      card.style.setProperty('--lift', Math.max(0, Math.min(118, avail)) + 'px');
+    };
+    $('#cardboxInner').addEventListener('mouseover', (ev) => {
+      const card = ev.target.closest('.rcard');
+      if (card) setLift(card);
+    });
+    $('#cardboxInner').addEventListener('focusin', (ev) => {
+      const card = ev.target.closest('.rcard');
+      if (card) setLift(card);
     });
     $('#cardboxInner').addEventListener('keydown', (ev) => {
       const card = ev.target.closest('.rcard');
