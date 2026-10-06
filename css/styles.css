@@ -967,7 +967,7 @@ button.tag.active {
   cursor: grab;
   transform-origin: 50% 100%;
   /* Zurückgleiten: weich an- und auslaufend */
-  transition: transform 0.45s cubic-bezier(0.37, 0, 0.63, 1);
+  transition: transform 0.5s cubic-bezier(0.37, 0, 0.63, 1);
   will-change: transform;
 }
 .rcard-tab {
@@ -1043,7 +1043,8 @@ button.tag.active {
  *           Sie bleibt dabei HINTER den folgenden Karten (wie im echten Kasten) und wird so weit
  *           hochgezogen, dass sie trotzdem komplett zu sehen ist; die nächste Karte bleibt an
  *           ihrem Platz und direkt anwählbar.
- *  Nachbar: die Karte davor neigt sich etwas zurück.
+ *  .above   alle Karten davor wandern im gleichen Takt mit nach oben, damit sie sichtbar
+ *           bleiben und man mit der Maus zu ihnen zurückgehen kann.
  * Wichtig: Alle Zustände nutzen dieselbe Liste von Transform-Funktionen
  * (translateY, rotate) – sonst interpoliert der Browser über Matrizen und die
  * Bewegung wirkt ruckelig. Animiert wird nur transform/opacity (läuft auf der GPU).
@@ -1069,20 +1070,23 @@ button.tag.active {
   transform: translateY(calc(var(--lift, 180px) * -1)) rotate(-0.8deg);
   outline: none;
   /* eine durchgehende, weiche Bewegung: sanft anfahren, gleichmäßig gleiten, sanft abbremsen */
-  transition: transform 0.55s cubic-bezier(0.37, 0, 0.63, 1);
+  transition: transform 0.7s cubic-bezier(0.37, 0, 0.63, 1);
 }
 .rcard.pulled::before,
 .rcard:focus-visible::before,
 .rcard.dragging::before {
   opacity: 1;
-  transition-duration: 0.55s;
+  transition-duration: 0.7s;
 }
-.rcard.nudge-prev {
-  transform: translateY(-4px) rotate(0.25deg);
-  transition: transform 0.55s cubic-bezier(0.37, 0, 0.63, 1);
+/* alle Karten (und Register) VOR der gezogenen wandern mit nach oben */
+.rcard.above,
+.divider.above {
+  transform: translateY(calc(var(--lift, 180px) * -1)) rotate(0deg);
+  transition: transform 0.7s cubic-bezier(0.37, 0, 0.63, 1);
 }
 .divider {
-  transition: transform 0.55s cubic-bezier(0.33, 0.9, 0.3, 1);
+  transform: translateY(0) rotate(0deg);
+  transition: transform 0.5s cubic-bezier(0.37, 0, 0.63, 1);
 }
 .rcard .rcard-tab {
   transition: filter 0.3s ease;
@@ -1097,6 +1101,7 @@ button.tag.active {
 @media (prefers-reduced-motion: reduce) {
   .rcard,
   .rcard.pulled,
+  .rcard.above,
   .rcard::before,
   .divider,
   .entry {

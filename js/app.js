@@ -1429,50 +1429,62 @@
     });
     // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
     const LIFT = 180; // Kartenhöhe (200) − Reiterhöhe der nächsten Karte (20) → Karte ganz über der nächsten
-    const PULL_MS = 550; // = Dauer von .rcard.pulled in styles.css
+    const STRIP = 46; // sichtbarer Streifen einer Karte im Stapel (= --step)
+    const PULL_MS = 700; // = Dauer von .rcard.pulled in styles.css
     const autoScroll = { until: 0 };
+    /** Hubhöhe bestimmen (gilt für die gezogene Karte UND alle Karten davor, sie wandern mit). */
     const setLift = (card) => {
       // offsetTop ignoriert Transformationen → Position der Karte im Ruhezustand
       const inner = $('#cardboxInner');
+      // über der Karte muss Platz für die Hubhöhe plus den Streifen der Karte davor sein
+      const need = LIFT + (card.previousElementSibling ? STRIP : 0);
       let avail = card.offsetTop - inner.offsetTop - inner.scrollTop - 26;
       // Steht die Karte nach dem Scrollen zu weit oben, scrollt die Kartei im gleichen Takt wie
-      // das Herausziehen ein Stück zurück – so kommt die Karte trotzdem ganz heraus und bleibt unter der Maus.
-      const missing = Math.min(LIFT - avail, inner.scrollTop);
+      // das Herausziehen ein Stück zurück – so bleibt alles sichtbar und die Karte unter der Maus.
+      const missing = Math.min(need - avail, inner.scrollTop);
       if (missing > 0) {
         animateScroll(inner, inner.scrollTop - missing, PULL_MS);
         autoScroll.until = performance.now() + PULL_MS + 50;
         avail += missing;
       }
-      card.style.setProperty('--lift', Math.max(0, Math.min(LIFT, avail)) + 'px');
+      const extra = need - LIFT;
+      inner.style.setProperty('--lift', Math.max(0, Math.min(LIFT, avail - extra)) + 'px');
     };
 
-    // „Mit der Hand durch die Kartei gehen“: kurz verweilen, dann wird die Karte
-    // in einer durchgehenden Bewegung herausgezogen (Nachbarn bewegen sich mit).
-    const PULL_DELAY = 60; // kurzes Verweilen, damit schnelles Drüberstreichen nicht jede Karte zieht
-    const hand = { card: null, timer: null };
+    // „Mit der Hand durch die Kartei gehen“: Die Karte wird herausgezogen und alle Karten
+    // davor wandern mit nach oben – so bleiben sie sichtbar und man kann zurückgehen.
+    // Die Karten dahinter bleiben an ihrem Platz.
+    const PULL_DELAY = 60; // kurzes Verweilen beim ersten Berühren, damit Drüberstreichen nicht sofort zieht
+    const hand = { card: null, timer: null, active: false };
+    const clearClasses = () => {
+      $$('#cardboxInner .pulled, #cardboxInner .above').forEach((el) => el.classList.remove('pulled', 'above'));
+    };
     const releaseCard = () => {
       clearTimeout(hand.timer);
-      if (hand.card) hand.card.classList.remove('pulled');
-      $$('#cardboxInner .nudge-prev').forEach((el) => el.classList.remove('nudge-prev'));
+      clearClasses();
       hand.card = null;
+      hand.active = false;
+    };
+    const pull = (card) => {
+      setLift(card);
+      clearClasses(); // im selben Schritt neu setzen → Karten, die oben bleiben, bewegen sich nicht
+      card.classList.add('pulled');
+      for (let el = card.previousElementSibling; el; el = el.previousElementSibling) el.classList.add('above');
+      hand.active = true;
     };
     const touchCard = (card) => {
       if (card === hand.card) return;
-      releaseCard();
+      clearTimeout(hand.timer);
       hand.card = card;
-      hand.timer = setTimeout(() => {
-        setLift(card);
-        card.classList.add('pulled');
-        const prev = card.previousElementSibling;
-        if (prev && prev.classList.contains('rcard')) prev.classList.add('nudge-prev');
-      }, PULL_DELAY);
+      // Wechsel zwischen Karten sofort, nur das erste Berühren mit kurzer Verzögerung
+      if (hand.active) pull(card);
+      else hand.timer = setTimeout(() => pull(card), PULL_DELAY);
     };
     $('#cardboxInner').addEventListener('pointerover', (ev) => {
       // während die Kartei automatisch nachscrollt, gleitet der Inhalt unter der Maus – nicht umschalten
       if (ev.pointerType === 'touch' || ui.drag || performance.now() < autoScroll.until) return;
       const card = ev.target.closest('.rcard');
-      if (card) touchCard(card);
-      else if (ev.target.closest('.divider')) releaseCard();
+      if (card) touchCard(card); // über einem Register bleibt der Zustand, wie er ist
     });
     $('#cardboxInner').addEventListener('pointerleave', () => {
       if (!ui.drag) releaseCard();
