@@ -80,7 +80,6 @@
     $('#weekTitle').textContent = kw;
     $('#weekRange').textContent = range;
     $('#todayBtn').disabled = ui.viewStart === S.currentWeekStart();
-    $('#generateListBtn').disabled = isReadOnly();
 
     const banner = $('#weekBanner');
     const w = currentWeek();
@@ -145,7 +144,7 @@
       ? st.ok
         ? 'Alle Zutaten vorhanden'
         : 'Es fehlen noch: ' + st.missing.join(', ')
-      : 'Noch keine Einkaufsliste generiert';
+      : '';
     return `<div class="entry${cls}" ${ro ? '' : 'draggable="true"'} data-uid="${e.uid}" style="--c:${recipe.color}" title="${esc(title)}" tabindex="0">
       <span class="entry-name">${esc(recipe.name)}</span>
       <span class="entry-meta">
@@ -237,75 +236,82 @@
   }
 
   /* ================= Einkaufsliste ================= */
+  // läuft automatisch mit dem Kalender mit – kein extra Knopf nötig
   function renderShopping() {
     const panel = $('#shoppingPanel');
     const week = currentWeek();
     const ro = isReadOnly();
     const badge = $('#shoppingBadge');
     const { kw } = weekLabel(ui.viewStart);
+    const items = S.shoppingItems(week);
+    const done = items.filter((i) => i.checked).length;
+    const open = items.length - done;
 
-    if (!week || !week.shopping) {
-      badge.hidden = true;
-      const hasEntries = S.entries(week).length > 0;
+    badge.hidden = !items.length;
+    badge.textContent = `${done}/${items.length}`;
+    // kleiner Hüpfer, wenn neue Einträge dazukommen
+    if (ui.lastOpen != null && ui.lastWeek === ui.viewStart && open > ui.lastOpen) {
+      badge.classList.remove('bump');
+      void badge.offsetWidth;
+      badge.classList.add('bump');
+    }
+    ui.lastOpen = open;
+    ui.lastWeek = ui.viewStart;
+
+    const addForm = ro
+      ? ''
+      : `<form class="add-item" data-act="add-item">
+          <input name="item" placeholder="Weiteres hinzufügen (z. B. Spülmittel)" aria-label="Eigener Eintrag" />
+          <button class="btn btn-sm">＋</button>
+        </form>`;
+
+    if (!items.length) {
       panel.innerHTML = `<div class="empty-state">
         <div class="empty-icon">🧺</div>
-        <h3>Noch keine Einkaufsliste für ${kw}</h3>
-        <p>${hasEntries ? 'Dein Plan steht? Dann erstelle jetzt die Liste.' : 'Plane zuerst ein paar Rezepte im Kalender.'}</p>
-        ${hasEntries && !ro ? '<button class="btn btn-primary" data-act="generate">🛒 Einkaufsliste generieren</button>' : ''}
-      </div>`;
+        <h3>Einkaufsliste · ${kw}</h3>
+        <p class="muted">Zieh Rezepte in den Kalender – ihre Zutaten landen automatisch hier.</p>
+      </div>${addForm}`;
       return;
     }
 
-    const items = week.shopping.items;
-    const done = items.filter((i) => i.checked).length;
-    badge.hidden = false;
-    badge.textContent = `${done}/${items.length}`;
-    const stale = !ro && S.isShoppingStale(week);
     const sorted = [...items].sort((a, b) => a.checked - b.checked || a.name.localeCompare(b.name, 'de'));
-    const pct = items.length ? Math.round((done / items.length) * 100) : 0;
+    const pct = Math.round((done / items.length) * 100);
+    const sub = (i) => {
+      if (i.extraTo) return `<span class="sitem-sub extra">＋ zusätzlich (${fmtAmount(i.extraTo, i.unit)} schon abgehakt)</span>`;
+      return i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : '';
+    };
 
     panel.innerHTML = `<div class="shop-head">
         <div>
           <h3>Einkaufsliste · ${kw}</h3>
-          <p class="muted small">Erstellt am ${new Date(week.shopping.generatedAt).toLocaleString('de-DE', {
-            dateStyle: 'short',
-            timeStyle: 'short',
-          })}</p>
+          <p class="muted small">Aktualisiert sich automatisch mit dem Plan</p>
         </div>
         <span class="shop-count">${done} / ${items.length}</span>
       </div>
       <div class="progress"><span style="width:${pct}%"></span></div>
-      ${
-        stale
-          ? `<div class="stale">Der Plan hat sich geändert. <button class="btn btn-sm btn-primary" data-act="generate">Liste aktualisieren</button></div>`
-          : ''
-      }
-      ${pct === 100 && items.length ? '<div class="all-done">🎉 Alles da – guten Appetit!</div>' : ''}
+      ${pct === 100 ? '<div class="all-done">🎉 Alles da – guten Appetit!</div>' : ''}
       <ul class="shop-list">
         ${sorted
           .map(
-            (i) => `<li class="sitem${i.checked ? ' checked' : ''}">
+            (i) => `<li class="sitem${i.checked ? ' checked' : ''}${i.extraTo ? ' extra' : ''}">
             <label>
-              <input type="checkbox" data-key="${esc(i.key)}" ${i.checked ? 'checked' : ''} ${ro ? 'disabled' : ''} />
+              <input type="checkbox" data-key="${esc(i.id)}" ${i.checked ? 'checked' : ''} ${ro ? 'disabled' : ''} />
               <span class="check" aria-hidden="true"></span>
               <span class="sitem-text">
-                <span class="sitem-main"><span class="amt">${fmtAmount(i.amount, i.unit)}</span> ${esc(i.name)}</span>
-                ${i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : ''}
+                <span class="sitem-main">${i.unit ? `<span class="amt">${fmtAmount(i.amount, i.unit)}</span> ` : ''}${esc(i.name)}</span>
+                ${sub(i)}
               </span>
             </label>
-            ${i.manual && !ro ? `<button class="mini" data-act="remove-item" data-key="${esc(i.key)}" aria-label="Entfernen">×</button>` : ''}
+            ${i.manual && !ro ? `<button class="mini" data-act="remove-item" data-key="${esc(i.id)}" aria-label="Entfernen">×</button>` : ''}
           </li>`
           )
           .join('')}
       </ul>
+      ${addForm}
       ${
         ro
           ? ''
-          : `<form class="add-item" data-act="add-item">
-          <input name="item" placeholder="Weiteres hinzufügen (z. B. Spülmittel)" aria-label="Eigener Eintrag" />
-          <button class="btn btn-sm">＋</button>
-        </form>
-        <div class="shop-actions">
+          : `<div class="shop-actions">
           <button class="btn btn-sm" data-act="check-all">Alle abhaken</button>
           <button class="btn btn-sm" data-act="uncheck-all">Alle zurücksetzen</button>
           <button class="btn btn-sm" data-act="copy-list">📋 Als Text kopieren</button>
@@ -815,7 +821,8 @@
         const days = S.dayTotals(w).filter((d) => d.values.kcal);
         const avg = days.length ? days.reduce((s, d) => s + d.values.kcal, 0) / days.length : 0;
         const names = [...new Set(es.map((e) => (S.getRecipe(e.recipeId, w) || {}).name).filter(Boolean))];
-        const shop = w.shopping ? `${w.shopping.items.filter((i) => i.checked).length}/${w.shopping.items.length} eingekauft` : 'keine Liste';
+        const items = S.shoppingItems(w);
+        const shop = items.length ? `${items.filter((i) => i.checked).length}/${items.length} eingekauft` : 'keine Einkäufe';
         return `<li class="arch-item">
           <div class="arch-main">
             <strong>${wkw}</strong> <span class="muted">${range}</span>
@@ -1038,7 +1045,7 @@
       ui.viewStart = S.currentWeekStart();
       renderAll();
     });
-    $('#generateListBtn').addEventListener('click', generateList);
+    $('#generateListBtn').addEventListener('click', showShopping);
     $('#archiveBtn').addEventListener('click', () => {
       renderArchive();
       openDialog($('#archiveDialog'));
@@ -1118,9 +1125,6 @@
       const act = ev.target.closest('[data-act]');
       if (!act || act.tagName === 'FORM') return;
       switch (act.dataset.act) {
-        case 'generate':
-          generateList();
-          break;
         case 'check-all':
           S.setAllItems(ui.viewStart, true);
           break;
@@ -1134,7 +1138,7 @@
           const w = currentWeek();
           const text =
             `Einkaufsliste ${weekLabel(ui.viewStart).kw}\n` +
-            w.shopping.items
+            S.shoppingItems(w)
               .filter((i) => !i.checked)
               .map((i) => `☐ ${i.unit ? fmtAmount(i.amount, i.unit) + ' ' : ''}${i.name}`)
               .join('\n');
@@ -1175,16 +1179,10 @@
     renderAll();
   }
 
-  function generateList() {
-    if (isReadOnly()) return;
-    const week = currentWeek();
-    if (!S.entries(week).length) {
-      toast('Der Plan ist noch leer – zieh zuerst Rezepte in den Kalender.');
-      return;
-    }
-    const list = S.generateShoppingList(ui.viewStart);
+  function showShopping() {
     setTab('shopping');
-    toast(`Einkaufsliste mit ${list.items.length} Einträgen erstellt`);
+    // auf schmalen Bildschirmen liegt die Liste unter dem Kalender
+    if (window.matchMedia('(max-width: 1100px)').matches) $('.side').scrollIntoView({ behavior: 'smooth' });
   }
 
   /* ================= Start ================= */

@@ -66,6 +66,7 @@ window.PF_STORE = (function () {
     state.ingredients ||= {};
     state.weeks ||= {};
     state.settings ||= { usdaKey: '' };
+    Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
     save(false);
     return state;
@@ -95,6 +96,7 @@ window.PF_STORE = (function () {
     state = data;
     state.ingredients ||= {};
     state.settings ||= { usdaKey: '' };
+    Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
     save();
   }
@@ -267,74 +269,125 @@ window.PF_STORE = (function () {
   function roundAmount(v, unit) {
     return unit === 'Stück' ? Math.round(v * 2) / 2 : Math.round(v);
   }
-  function needsSignature(items) {
-    return items.map((i) => `${i.key}=${i.amount}`).join(';');
-  }
 
-  function generateShoppingList(start) {
-    const week = getWeek(start, true);
-    const needs = computeNeeds(week);
-    const prev = week.shopping ? week.shopping.items : [];
-    const prevByKey = new Map(prev.map((i) => [i.key, i]));
-    const items = needs.map((n) => {
-      const old = prevByKey.get(n.key);
-      // Abgehakt bleibt abgehakt, solange die Menge nicht gestiegen ist
-      const checked = !!(old && old.checked && !old.manual && old.amount >= n.amount);
-      return { ...n, checked };
-    });
-    for (const old of prev) if (old.manual) items.push(old);
-    week.shopping = { items, generatedAt: new Date().toISOString(), signature: needsSignature(needs) };
-    save();
+  /*
+   * Die Einkaufsliste läuft automatisch mit dem Plan mit.
+   * Gespeichert wird nur, wie viel je Zutat schon abgehakt (= gekauft) ist:
+   *   week.shopping = { bought: { [key]: Menge }, manual: [{ key, name, checked }] }
+   * Steigt der Bedarf über die gekaufte Menge, erscheint der Rest als neuer, offener Eintrag.
+   */
+  function shopping(week) {
+    week.shopping ||= { bought: {}, manual: [] };
+    week.shopping.bought ||= {};
+    week.shopping.manual ||= [];
     return week.shopping;
   }
 
-  function isShoppingStale(week) {
-    if (!week || !week.shopping) return false;
-    return needsSignature(computeNeeds(week)) !== week.shopping.signature;
+  /** Alte Listen (vor dem Auto-Sync) ins neue Format überführen. */
+  function migrateShopping(week) {
+    const old = week.shopping;
+    if (!old || !Array.isArray(old.items)) return;
+    const bought = {};
+    const manual = [];
+    for (const i of old.items) {
+      if (i.manual) manual.push({ key: i.key, name: i.name, checked: !!i.checked });
+      else if (i.checked) bought[i.key] = i.amount;
+    }
+    week.shopping = { bought, manual };
   }
 
-  function toggleItem(start, key, checked) {
+  /** Anzeigezeilen der Einkaufsliste (abgehakter Teil + offener Rest je Zutat). */
+  function shoppingItems(week) {
+    if (!week) return [];
+    const sh = week.shopping || { bought: {}, manual: [] };
+    const rows = [];
+    for (const need of computeNeeds(week)) {
+      const have = Math.min(sh.bought[need.key] || 0, need.amount);
+      const open = roundAmount(need.amount - have, need.unit);
+      if (have > 0) rows.push({ ...need, id: need.key + '#done', amount: have, checked: true });
+      if (open > 0) rows.push({ ...need, id: need.key + '#open', amount: open, checked: false, extraTo: have > 0 ? have : 0 });
+    }
+    for (const m of sh.manual) rows.push({ id: m.key, key: m.key, name: m.name, unit: '', amount: 0, recipes: [], checked: m.checked, manual: true });
+    return rows;
+  }
+
+  function toggleItem(start, id, checked) {
     const week = getWeek(start);
-    if (!week || !week.shopping) return;
-    const item = week.shopping.items.find((i) => i.key === key);
-    if (item) item.checked = checked;
+    if (!week || week.archived) return;
+    const sh = shopping(week);
+    const manual = sh.manual.find((m) => m.key === id);
+    if (manual) manual.checked = checked;
+    else {
+      const key = id.replace(/#(done|open)$/, '');
+      const need = computeNeeds(week).find((n) => n.key === key);
+      if (checked && need) sh.bought[key] = need.amount;
+      else delete sh.bought[key];
+    }
     save();
   }
   function setAllItems(start, checked) {
     const week = getWeek(start);
-    if (!week || !week.shopping) return;
-    week.shopping.items.forEach((i) => (i.checked = checked));
+    if (!week || week.archived) return;
+    const sh = shopping(week);
+    sh.bought = {};
+    if (checked) for (const n of computeNeeds(week)) sh.bought[n.key] = n.amount;
+    sh.manual.forEach((m) => (m.checked = checked));
     save();
   }
   function addManualItem(start, name) {
     const week = getWeek(start, true);
-    week.shopping ||= { items: [], generatedAt: new Date().toISOString(), signature: needsSignature(computeNeeds(week)) };
-    week.shopping.items.push({ key: 'manual|' + uid(), name, unit: '', amount: 0, recipes: [], checked: false, manual: true });
+    if (week.archived) return;
+    shopping(week).manual.push({ key: 'manual|' + uid(), name, checked: false });
     save();
   }
-  function removeItem(start, key) {
+  function removeItem(start, id) {
     const week = getWeek(start);
     if (!week || !week.shopping) return;
-    week.shopping.items = week.shopping.items.filter((i) => i.key !== key);
+    const sh = shopping(week);
+    sh.manual = sh.manual.filter((m) => m.key !== id);
     save();
   }
 
   /**
-   * Status eines geplanten Rezepts anhand der Einkaufsliste:
-   * null = keine Liste, sonst { ok, have, total, missing: [Namen] }
+   * Status aller geplanten Rezepte: Die gekauften Mengen werden in zeitlicher
+   * Reihenfolge (Tag, Mahlzeit) auf die Rezepte verteilt. Ein Rezept ist grün,
+   * wenn alle seine Zutaten vollständig gedeckt sind.
    */
-  function entryStatus(week, entry) {
-    if (!week || !week.shopping) return null;
-    const recipe = getRecipe(entry.recipeId, week);
-    if (!recipe) return null;
-    const byKey = new Map(week.shopping.items.map((i) => [i.key, i]));
-    const missing = [];
-    for (const ing of recipe.ingredients) {
-      const item = byKey.get(itemKey(ing.name, ing.unit));
-      if (!item || !item.checked) missing.push(ing.name);
+  function statusMap(week) {
+    const map = new Map();
+    if (!week) return map;
+    const mealIdx = Object.fromEntries(MEALS.map((m, i) => [m.key, i]));
+    const remaining = { ...((week.shopping && week.shopping.bought) || {}) };
+    const ordered = entries(week).sort((a, b) => a.day - b.day || mealIdx[a.meal] - mealIdx[b.meal]);
+    for (const e of ordered) {
+      const recipe = getRecipe(e.recipeId, week);
+      if (!recipe) continue;
+      const scale = (e.servings || recipe.servings || 1) / (recipe.servings || 1);
+      const needs = new Map();
+      for (const ing of recipe.ingredients) {
+        const key = itemKey(ing.name, ing.unit);
+        if (!needs.has(key)) needs.set(key, { name: ing.name, amount: 0 });
+        needs.get(key).amount += ing.amount * scale;
+      }
+      const missing = [];
+      for (const [key, n] of needs) {
+        const avail = remaining[key] || 0;
+        // kleine Toleranz für Rundungen in der Liste
+        if (avail >= n.amount - 0.51) remaining[key] = Math.max(0, avail - n.amount);
+        else {
+          missing.push(n.name);
+          remaining[key] = 0;
+        }
+      }
+      const total = needs.size;
+      map.set(e.uid, { ok: missing.length === 0, have: total - missing.length, total, missing });
     }
-    const total = recipe.ingredients.length;
-    return { ok: missing.length === 0, have: total - missing.length, total, missing };
+    return map;
+  }
+
+  /** Status eines geplanten Rezepts: { ok, have, total, missing: [Namen] } */
+  function entryStatus(week, entry) {
+    return statusMap(week).get(entry.uid) || null;
   }
 
   /* ---------- Archiv ---------- */
@@ -504,8 +557,7 @@ window.PF_STORE = (function () {
     removeEntry,
     setEntryServings,
     computeNeeds,
-    generateShoppingList,
-    isShoppingStale,
+    shoppingItems,
     toggleItem,
     setAllItems,
     addManualItem,
