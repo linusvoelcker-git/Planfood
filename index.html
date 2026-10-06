@@ -59,6 +59,7 @@
       <div class="side-panel" id="panel-cards">
         <div class="cards-toolbar">
           <input type="search" id="recipeSearch" placeholder="Rezept suchen …" aria-label="Rezept suchen" />
+          <button class="icon-btn" id="importBtn" title="Rezepte aus Excel importieren" aria-label="Rezepte aus Excel importieren">📥</button>
           <button class="btn btn-primary btn-sm" id="newRecipeBtn">＋ Neues Rezept</button>
         </div>
         <div class="cardbox" id="cardbox">
@@ -132,6 +133,9 @@
   <!-- Archiv -->
   <dialog id="archiveDialog" class="dialog dialog-wide"></dialog>
 
+  <!-- Excel-Import -->
+  <dialog id="importDialog" class="dialog dialog-wide"></dialog>
+
   <!-- Einstellungen -->
   <dialog id="settingsDialog" class="dialog"></dialog>
 
@@ -143,6 +147,7 @@
   <script src="js/foods.js"></script>
   <script src="js/nutrition.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/importer.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

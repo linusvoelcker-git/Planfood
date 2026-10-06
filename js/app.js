@@ -905,6 +905,152 @@
     return start;
   }
 
+  /* ================= Excel-Import ================= */
+  function openImport() {
+    const dlg = $('#importDialog');
+    let parsed = null;
+    const target = isReadOnly() ? nextOpenWeek() : ui.viewStart;
+
+    const renderStart = (msg = '') => {
+      dlg.innerHTML = `<header class="dialog-head"><div><h2>📥 Rezepte aus Excel importieren</h2>
+          <span class="muted">.xlsx, .xls, .ods oder .csv – wird nur in deinem Browser gelesen</span></div>
+          <button class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+        <div class="dialog-body">
+          <label class="dropzone" id="importDrop">
+            <input type="file" accept=".xlsx,.xls,.xlsm,.ods,.csv" hidden data-act="file" />
+            <span class="dropzone-icon">📄</span>
+            <strong>Datei auswählen oder hierher ziehen</strong>
+            <span class="muted small">${msg ? esc(msg) : 'Mehrere Blätter werden automatisch erkannt.'}</span>
+          </label>
+          <h3>So muss die Tabelle aussehen</h3>
+          <p class="small">Eine Zeile pro Zutat, Überschriften in einer Zeile (Reihenfolge egal):</p>
+          <table class="nutri-table import-format">
+            <thead><tr><th>Gericht</th><th>Zutat</th><th>Menge</th><th>Einheit</th><th class="muted">Zubereitung</th></tr></thead>
+            <tbody>
+              <tr><td>Linsencurry</td><td>Rote Linsen</td><td>200</td><td>g</td><td class="muted">Zwiebel anschwitzen …</td></tr>
+              <tr><td>Linsencurry</td><td>Zwiebel</td><td>1</td><td>Stück</td><td></td></tr>
+            </tbody>
+          </table>
+          <p class="muted small">Optional erkannt: <b>Tag</b> &amp; <b>Mahlzeit</b> (→ Wochenplan), <b>Portionen</b>, <b>Kategorie</b>,
+            Nährwert-Spalten (kcal, Protein, Fett, KH) sowie ein eigenes Blatt mit <b>Zutat + Nährwerten pro 100 g</b>.
+            Einheiten: g, kg, Stück; ml/l werden 1:1 als g, EL/TL als 15/5 g übernommen.</p>
+          <button class="btn btn-sm" data-act="template">⬇ Vorlage herunterladen</button>
+        </div>`;
+    };
+
+    const renderPreview = () => {
+      const { recipes, nutrition, plan, warnings } = parsed;
+      const nutriMap = new Map(nutrition.map((n) => [N.norm(n.name), n]));
+      const kcalOf = (r) => {
+        let kcal = 0;
+        for (const ing of r.ingredients) {
+          const info = nutriMap.get(N.norm(ing.name)) || infoFor(ing.name);
+          const g = info && N.gramsOf(ing.amount, ing.unit, info);
+          if (g != null && info.nutrients.kcal != null) kcal += (info.nutrients.kcal * g) / 100;
+        }
+        return kcal / (r.servings || 1);
+      };
+      const exists = (r) => S.state.recipes.some((x) => N.norm(x.name) === N.norm(r.name));
+      const dupes = recipes.filter(exists).length;
+      dlg.innerHTML = `<form method="dialog">
+        <header class="dialog-head"><div><h2>📥 Import-Vorschau</h2>
+          <span class="muted">${recipes.length} Rezepte · ${nutrition.length} Zutaten mit Nährwerten${plan.length ? ` · ${plan.length} geplante Mahlzeiten` : ''}</span></div>
+          <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+        <div class="dialog-body">
+          ${warnings.length ? `<ul class="import-warn">${warnings.map((w) => `<li>⚠ ${esc(w)}</li>`).join('')}</ul>` : ''}
+          <ul class="import-list">
+            ${recipes
+              .map(
+                (r) => `<li>
+                <div><strong>${esc(r.name)}</strong>${exists(r) ? ' <span class="chip">schon vorhanden</span>' : ''}
+                  <div class="muted small">${esc(r.category)} · ${r.ingredients.length} Zutaten · ${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}${r.instructions ? ' · mit Zubereitung' : ''}</div></div>
+                <span class="import-kcal">${fmtNum(kcalOf(r))} kcal</span>
+              </li>`
+              )
+              .join('')}
+          </ul>
+          ${
+            dupes
+              ? `<label class="check-row"><input type="checkbox" name="overwrite" checked /> ${dupes} schon vorhandene Rezepte mit den Daten aus der Datei aktualisieren</label>`
+              : ''
+          }
+          ${
+            plan.length
+              ? `<label class="check-row"><input type="checkbox" name="plan" /> Wochenplan aus der Datei in <b>${weekLabel(target).kw}</b> (${weekLabel(target).range}) eintragen</label>`
+              : ''
+          }
+        </div>
+        <footer class="dialog-foot">
+          <button type="button" class="btn" data-act="back">Andere Datei</button>
+          <button class="btn btn-primary" ${recipes.length ? '' : 'disabled'}>${recipes.length} Rezepte importieren</button>
+        </footer>
+      </form>`;
+      $('form', dlg).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const res = S.importData(parsed, {
+          overwrite: f.overwrite ? f.overwrite.checked : false,
+          planWeek: f.plan && f.plan.checked ? target : null,
+        });
+        dlg.close();
+        if (res.planned) ui.viewStart = target;
+        renderAll();
+        toast(
+          `${res.created} neu, ${res.updated} aktualisiert${res.skipped ? `, ${res.skipped} übersprungen` : ''}` +
+            (res.planned ? ` · ${res.planned} Mahlzeiten eingeplant` : '')
+        );
+      });
+    };
+
+    const handleFile = async (file) => {
+      if (!file) return;
+      renderStart('Lese ' + file.name + ' …');
+      try {
+        parsed = await window.PF_IMPORT.parseFile(file);
+        if (!parsed.recipes.length) {
+          renderStart('Keine Rezepte gefunden – gibt es Spalten „Gericht“, „Zutat“ und „Menge“?');
+          return;
+        }
+        renderPreview();
+      } catch (e) {
+        renderStart('Fehler: ' + e.message);
+      }
+    };
+
+    dlg.onchange = (ev) => {
+      if (ev.target.matches('[data-act="file"]')) handleFile(ev.target.files[0]);
+    };
+    dlg.onclick = async (ev) => {
+      const act = ev.target.closest('[data-act]');
+      if (!act) return;
+      if (act.dataset.act === 'back') renderStart();
+      if (act.dataset.act === 'template') {
+        try {
+          await window.PF_IMPORT.downloadTemplate();
+        } catch (e) {
+          toast(e.message);
+        }
+      }
+    };
+    dlg.ondragover = (ev) => {
+      ev.preventDefault();
+      const z = $('#importDrop', dlg);
+      if (z) z.classList.add('over');
+    };
+    dlg.ondragleave = () => {
+      const z = $('#importDrop', dlg);
+      if (z) z.classList.remove('over');
+    };
+    dlg.ondrop = (ev) => {
+      ev.preventDefault();
+      handleFile(ev.dataTransfer.files[0]);
+    };
+
+    renderStart();
+    openDialog(dlg);
+    window.PF_IMPORT.loadLib().catch(() => {}); // schon mal vorladen
+  }
+
   /* ================= Einstellungen ================= */
   function openSettings() {
     const dlg = $('#settingsDialog');
@@ -921,6 +1067,7 @@
           <div class="row-btns">
             <button type="button" class="btn" data-act="export">⬇ Export (JSON)</button>
             <label class="btn">⬆ Import<input type="file" accept="application/json,.json" hidden data-act="import" /></label>
+            <button type="button" class="btn" data-act="excel">📥 Rezepte aus Excel</button>
             <button type="button" class="btn btn-ghost danger" data-act="reset">Alles zurücksetzen</button>
           </div>
         </div>
@@ -945,6 +1092,9 @@
         a.download = `planfood-${S.isoDate(new Date())}.json`;
         a.click();
         URL.revokeObjectURL(a.href);
+      } else if (act.dataset.act === 'excel') {
+        dlg.close();
+        openImport();
       } else if (act.dataset.act === 'reset') {
         if (confirm('Wirklich alle Rezepte, Pläne und das Archiv löschen und mit Beispieldaten neu starten?')) {
           S.reset();
@@ -1052,6 +1202,7 @@
     });
     $('#settingsBtn').addEventListener('click', openSettings);
     $('#newRecipeBtn').addEventListener('click', () => openEditor());
+    $('#importBtn').addEventListener('click', openImport);
     $('#recipeSearch').addEventListener('input', (ev) => {
       ui.search = ev.target.value;
       renderCards();

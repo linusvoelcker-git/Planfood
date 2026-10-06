@@ -18,6 +18,10 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   Kommt später mehr von einer schon abgehakten Zutat dazu, erscheint die zusätzliche Menge als neuer, offener Eintrag.
 - **Archiv**: Wochen, die vorbei sind, werden automatisch archiviert (schreibgeschützt, mit Kopie der Rezepte).
   Man kann eine Woche auch manuell abschließen, sie wieder öffnen oder als Vorlage für eine neue Woche nutzen.
+- **Excel-Import** (📥 neben der Suche): liest .xlsx/.xls/.ods/.csv mit einer Zeile pro Zutat
+  (Spalten *Gericht, Zutat, Menge, Einheit*, optional *Zubereitung, Portionen, Kategorie, Tag, Mahlzeit*, Nährwert-Spalten)
+  und formt daraus einzelne Rezepte. Ein Blatt mit *Zutat + Nährwerten pro 100 g* wird als Nährwertquelle übernommen,
+  *Tag/Mahlzeit* auf Wunsch als Wochenplan. Vorlage zum Herunterladen im Import-Dialog.
 - **Nährwerte**: pro Portion, pro Tag und pro Woche (Makros + Mikronährstoffe, sobald Daten vorhanden sind).
 
 ## Starten
@@ -55,6 +59,7 @@ Die Datenschicht steckt komplett in `js/store.js` und lässt sich dort austausch
 index.html         Grundgerüst & Dialoge
 css/styles.css     Design (hell/dunkel, responsiv, Karteikasten-Animation)
 js/foods.js        eingebaute Nährwerttabelle
+js/importer.js     Excel-/CSV-Import (nutzt SheetJS in js/vendor, Apache-2.0)
 js/nutrition.js    Nährwert-Suche (Open Food Facts, USDA) & Berechnung
 js/store.js        Daten: Rezepte, Wochen, Einkaufsliste, Archiv, Speicherung
 js/app.js          Oberfläche & Drag and Drop

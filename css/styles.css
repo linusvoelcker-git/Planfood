@@ -676,7 +676,7 @@ a {
 .divider,
 .rcard {
   --h: 196px;
-  --step: 42px;
+  --step: 46px;
   position: relative;
   height: var(--h);
   margin-top: calc(var(--step) - var(--h));
@@ -714,9 +714,9 @@ a {
 /* Rezeptkarte */
 .rcard {
   background-color: var(--card);
-  background-image: linear-gradient(180deg, transparent 0 31px, color-mix(in srgb, var(--c) 70%, #fff) 31px 33px, transparent 33px),
+  background-image: linear-gradient(180deg, transparent 0 26px, color-mix(in srgb, var(--c) 70%, #fff) 26px 28px, transparent 28px),
     repeating-linear-gradient(180deg, transparent 0 21px, var(--card-line) 21px 22px);
-  background-position: 0 0, 0 33px;
+  background-position: 0 0, 0 26px;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.18), 0 1px 0 rgba(0, 0, 0, 0.05);
   color: #2d2a26;
   cursor: grab;
@@ -746,14 +746,14 @@ a {
   white-space: nowrap;
 }
 .rcard-body {
-  padding: 0.45rem 0.8rem 0.6rem;
+  padding: 0.25rem 0.8rem 0.6rem;
 }
 .rcard-meta {
   display: flex;
   justify-content: space-between;
   font-size: 0.78rem;
   color: #6b6258;
-  height: 24px;
+  height: 20px;
   align-items: center;
 }
 .rcard-meta .kcal {
@@ -762,7 +762,7 @@ a {
 }
 .rcard-ings {
   list-style: none;
-  margin: 14px 0 0;
+  margin: 24px 0 0;
   padding: 0;
   font-size: 0.78rem;
   line-height: 22px;
@@ -1303,6 +1303,75 @@ a {
 .field.highlight > span {
   color: var(--accent);
   font-weight: 700;
+}
+
+/* Excel-Import */
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1.6rem 1rem;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover,
+.dropzone.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dropzone-icon {
+  font-size: 2rem;
+}
+.import-format {
+  max-width: none;
+  margin-bottom: 0.5rem;
+}
+.import-format td,
+.import-format th {
+  text-align: left !important;
+}
+.import-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.8rem;
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.import-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.import-list li:last-child {
+  border-bottom: none;
+}
+.import-kcal {
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.import-warn {
+  margin: 0 0 0.8rem;
+  padding: 0.5rem 0.75rem 0.5rem 1.6rem;
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.check-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.4rem 0;
+  font-size: 0.92rem;
 }
 
 /* Archiv */

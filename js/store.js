@@ -390,6 +390,67 @@ window.PF_STORE = (function () {
     return statusMap(week).get(entry.uid) || null;
   }
 
+  /* ---------- Import ---------- */
+  /**
+   * Übernimmt geparste Rezepte (siehe importer.js).
+   * opts.overwrite: gleichnamige Rezepte aktualisieren statt überspringen
+   * opts.planWeek: Wochenstart, in den der Plan aus der Datei eingetragen wird
+   */
+  function importData(data, opts = {}) {
+    const result = { created: 0, updated: 0, skipped: 0, planned: 0, nutrition: 0 };
+    for (const n of data.nutrition) {
+      state.ingredients[N.norm(n.name)] = {
+        name: n.name,
+        nutrients: n.nutrients,
+        gramsPerPiece: (state.ingredients[N.norm(n.name)] || {}).gramsPerPiece || null,
+        source: 'Excel-Import',
+      };
+      result.nutrition++;
+    }
+    const byName = new Map();
+    for (const r of data.recipes) {
+      const existing = state.recipes.find((x) => N.norm(x.name) === N.norm(r.name));
+      if (existing && !opts.overwrite) {
+        result.skipped++;
+        byName.set(N.norm(r.name), existing);
+        continue;
+      }
+      const recipe = {
+        id: existing ? existing.id : uid(),
+        color: existing ? existing.color : COLORS[(state.recipes.length + result.created) % COLORS.length],
+        name: r.name,
+        category: r.category,
+        servings: r.servings,
+        ingredients: r.ingredients.map((i) => ({ ...i })),
+        instructions: r.instructions,
+      };
+      // wie upsertRecipe, aber ohne Speichern pro Rezept
+      for (const ing of recipe.ingredients) {
+        const key = N.norm(ing.name);
+        if (!state.ingredients[key]) {
+          const hit = N.autoDetect(ing.name);
+          if (hit) state.ingredients[key] = { name: ing.name, ...hit };
+        }
+      }
+      if (existing) Object.assign(existing, recipe), result.updated++;
+      else state.recipes.push(recipe), result.created++;
+      byName.set(N.norm(r.name), existing || recipe);
+    }
+    if (opts.planWeek && data.plan.length) {
+      const week = getWeek(opts.planWeek, true);
+      if (!week.archived) {
+        for (const p of data.plan) {
+          const recipe = byName.get(N.norm(p.name));
+          if (!recipe) continue;
+          slotList(week, p.day, p.meal).push({ uid: uid(), recipeId: recipe.id, servings: recipe.servings || 1 });
+          result.planned++;
+        }
+      }
+    }
+    save();
+    return result;
+  }
+
   /* ---------- Archiv ---------- */
   function snapshotRecipes(week) {
     const snap = {};
@@ -568,6 +629,7 @@ window.PF_STORE = (function () {
     deleteWeek,
     archivedWeeks,
     copyWeek,
+    importData,
     dayTotals,
   };
 })();
