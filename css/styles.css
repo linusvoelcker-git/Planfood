@@ -813,6 +813,107 @@ button.tag.active {
   opacity: 0.85;
 }
 
+/* Ansicht umschalten: Karteikasten / Liste */
+.view-toggle {
+  display: inline-flex;
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 2px;
+  flex: none;
+}
+.view-toggle button {
+  border: none;
+  background: transparent;
+  width: 2rem;
+  height: 1.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--muted);
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+.view-toggle button.active {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  filter: none;
+  opacity: 1;
+}
+
+/* Einfache Liste statt Karteikasten */
+.cardbox.list-mode {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0;
+}
+.cardbox.list-mode::after {
+  display: none;
+}
+.cardbox.list-mode .cardbox-inner {
+  padding: 0.25rem 0.75rem 0.75rem;
+}
+.cardbox.list-mode .cardbox-empty {
+  color: var(--muted);
+}
+.rlist-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0.7rem 0.25rem 0.35rem;
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+}
+.rlist-head span {
+  font-family: var(--font);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.rlist {
+  list-style: none;
+  margin: 0.3rem 0 0.4rem;
+  padding: 0;
+}
+.ritem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  cursor: grab;
+  transition: background 0.15s;
+}
+.ritem::before {
+  content: '';
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--c);
+  flex: none;
+}
+.ritem:hover,
+.ritem:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+.ritem.dragging {
+  opacity: 0.45;
+}
+.ritem-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Registerkarte (Kategorie) – liegt im Stapel wie eine Karte */
 .divider,
 .rcard {
@@ -933,15 +1034,16 @@ button.tag.active {
   color: #6b6258;
 }
 /*
- * Das Herausziehen aus dem Register – in drei Stufen (Klassen setzt app.js):
- *  1. .peek    sofort: Karte wird leicht angehoben, als würde ein Finger sie antippen
- *  2. .pulled  nach kurzem Verweilen: Karte wird langsam herausgezogen und kippt etwas nach vorn
- *  3. Nachbarn: die Karte davor neigt sich zurück, die dahinter wird ein Stück weggedrückt
+ * Das Herausziehen aus dem Register (Klassen setzt app.js):
+ *  .pulled  nach kurzem Verweilen wird die Karte in EINER durchgehenden Bewegung
+ *           herausgezogen: sanft anfahren, lang auslaufen, leicht nach vorn gekippt.
+ *  Nachbarn: die Karte davor neigt sich zurück, die dahinter wird ein Stück weggedrückt.
+ * Wichtig: Alle Zustände nutzen dieselbe Liste von Transform-Funktionen
+ * (perspective, translateY, rotateX, rotate) – sonst interpoliert der Browser
+ * über Matrizen und die Bewegung wirkt ruckelig.
  */
-.rcard.peek {
-  transform: translateY(-12px) rotate(-0.3deg);
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
-  transition: transform 0.28s cubic-bezier(0.3, 0.7, 0.4, 1), box-shadow 0.28s ease;
+.rcard {
+  transform: perspective(900px) translateY(0) rotateX(0deg) rotate(0deg);
 }
 .rcard.pulled,
 .rcard:focus-visible,
@@ -949,16 +1051,19 @@ button.tag.active {
   transform: perspective(900px) translateY(calc(var(--lift, 118px) * -1)) rotateX(4deg) rotate(-1deg);
   box-shadow: var(--shadow-lift);
   outline: none;
-  transition: transform 0.75s cubic-bezier(0.22, 0.85, 0.32, 1), box-shadow 0.75s ease;
+  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1), box-shadow 0.75s ease;
 }
 .rcard.nudge-prev {
-  transform: translateY(-4px) rotate(0.25deg);
-  transition-duration: 0.45s;
+  transform: perspective(900px) translateY(-4px) rotateX(0deg) rotate(0.25deg);
+  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1);
 }
-.rcard.nudge-next,
+.rcard.nudge-next {
+  transform: perspective(900px) translateY(7px) rotateX(0deg) rotate(0.2deg);
+  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1);
+}
 .divider.nudge-next {
   transform: translateY(7px) rotate(0.2deg);
-  transition: transform 0.45s cubic-bezier(0.33, 0.9, 0.3, 1);
+  transition: transform 0.75s cubic-bezier(0.45, 0.05, 0.2, 1);
 }
 .divider {
   transition: transform 0.55s cubic-bezier(0.33, 0.9, 0.3, 1);
@@ -975,7 +1080,6 @@ button.tag.active {
 }
 @media (prefers-reduced-motion: reduce) {
   .rcard,
-  .rcard.peek,
   .rcard.pulled,
   .divider,
   .entry {

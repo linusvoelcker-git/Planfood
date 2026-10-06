@@ -10,12 +10,29 @@
   const esc = (s) =>
     String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // kleine Ansichts-Vorlieben pro Browser (nicht Teil der Daten)
+  function loadPref(key, fallback) {
+    try {
+      return localStorage.getItem(key) || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  function savePref(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* egal */
+    }
+  }
+
   const ui = {
     viewStart: S.currentWeekStart(),
     tab: 'cards',
     search: '',
     detail: null, // { recipeId, entryUid }
     tagFilter: new Set(), // aktive Tag-Filter (UND-verknüpft)
+    cardView: loadPref('planfood:cardView', 'cards'), // 'cards' (Karteikasten) | 'list'
     drag: null, // { type: 'recipe'|'entry', id }
   };
 
@@ -219,6 +236,16 @@
       inner.innerHTML = `<div class="cardbox-empty">${filtered ? 'Kein Rezept passt zu Suche/Filter.' : 'Noch keine Rezepte – leg dein erstes an!'}</div>`;
       return;
     }
+    const list = ui.cardView === 'list';
+    $('#cardbox').classList.toggle('list-mode', list);
+    $$('.view-toggle button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.view === ui.cardView);
+      b.setAttribute('aria-pressed', b.dataset.view === ui.cardView);
+    });
+    if (list) {
+      inner.innerHTML = renderRecipeList(recipes);
+      return;
+    }
     let html = '';
     let i = 0;
     for (const cat of S.CATEGORIES) {
@@ -249,6 +276,22 @@
       });
     }
     inner.innerHTML = html;
+  }
+
+  /** Einfache Liste: nur Namen, nach Kategorie gruppiert, ebenfalls ziehbar. */
+  function renderRecipeList(recipes) {
+    let html = '';
+    for (const cat of S.CATEGORIES) {
+      const items = recipes.filter((r) => (r.category || 'Sonstiges') === cat).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      if (!items.length) continue;
+      html += `<section class="rlist-group"><h4 class="rlist-head">${esc(cat)} <span>${items.length}</span></h4><ul class="rlist">${items
+        .map(
+          (r) =>
+            `<li class="ritem" draggable="true" tabindex="0" data-id="${r.id}" style="--c:${r.color}"><span class="ritem-name">${esc(r.name)}</span></li>`
+        )
+        .join('')}</ul></section>`;
+    }
+    return html;
   }
 
   /** Filterleiste über der Kartei: Tags als farbige Chips mit Trefferanzahl. */
@@ -1235,7 +1278,7 @@
   /* ================= Drag & Drop ================= */
   function setupDnD() {
     document.addEventListener('dragstart', (ev) => {
-      const card = ev.target.closest && ev.target.closest('.rcard');
+      const card = ev.target.closest && ev.target.closest('.rcard, .ritem');
       const entry = ev.target.closest && ev.target.closest('.entry');
       if (card) {
         ui.drag = { type: 'recipe', id: card.dataset.id };
@@ -1319,6 +1362,13 @@
     $('#settingsBtn').addEventListener('click', openSettings);
     $('#newRecipeBtn').addEventListener('click', () => openEditor());
     $('#importBtn').addEventListener('click', openImport);
+    $$('.view-toggle button').forEach((b) =>
+      b.addEventListener('click', () => {
+        ui.cardView = b.dataset.view;
+        savePref('planfood:cardView', ui.cardView);
+        renderCards();
+      })
+    );
     $('#tagFilter').addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-tag]');
       if (b) {
@@ -1350,7 +1400,7 @@
 
     // Kartei: Klick / Enter öffnet das Rezept
     $('#cardboxInner').addEventListener('click', (ev) => {
-      const card = ev.target.closest('.rcard');
+      const card = ev.target.closest('.rcard, .ritem');
       if (card) openDetail(card.dataset.id);
     });
     // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
@@ -1361,12 +1411,13 @@
       card.style.setProperty('--lift', Math.max(0, Math.min(118, avail)) + 'px');
     };
 
-    // „Mit der Hand durch die Kartei gehen“: erst antippen (peek), nach kurzem Verweilen herausziehen (pulled)
+    // „Mit der Hand durch die Kartei gehen“: kurz verweilen, dann wird die Karte
+    // in einer durchgehenden Bewegung herausgezogen (Nachbarn bewegen sich mit).
     const PULL_DELAY = 160;
     const hand = { card: null, timer: null };
     const releaseCard = () => {
       clearTimeout(hand.timer);
-      if (hand.card) hand.card.classList.remove('peek', 'pulled');
+      if (hand.card) hand.card.classList.remove('pulled');
       $$('#cardboxInner .nudge-prev, #cardboxInner .nudge-next').forEach((el) => el.classList.remove('nudge-prev', 'nudge-next'));
       hand.card = null;
     };
@@ -1374,13 +1425,14 @@
       if (card === hand.card) return;
       releaseCard();
       hand.card = card;
-      setLift(card);
-      card.classList.add('peek');
-      const prev = card.previousElementSibling;
-      const next = card.nextElementSibling;
-      if (prev && prev.classList.contains('rcard')) prev.classList.add('nudge-prev');
-      if (next) next.classList.add('nudge-next');
-      hand.timer = setTimeout(() => card.classList.add('pulled'), PULL_DELAY);
+      hand.timer = setTimeout(() => {
+        setLift(card);
+        card.classList.add('pulled');
+        const prev = card.previousElementSibling;
+        const next = card.nextElementSibling;
+        if (prev && prev.classList.contains('rcard')) prev.classList.add('nudge-prev');
+        if (next) next.classList.add('nudge-next');
+      }, PULL_DELAY);
     };
     $('#cardboxInner').addEventListener('pointerover', (ev) => {
       if (ev.pointerType === 'touch' || ui.drag) return;
@@ -1398,7 +1450,7 @@
       if (card) setLift(card);
     });
     $('#cardboxInner').addEventListener('keydown', (ev) => {
-      const card = ev.target.closest('.rcard');
+      const card = ev.target.closest('.rcard, .ritem');
       if (card && ev.key === 'Enter') openDetail(card.dataset.id);
     });
 

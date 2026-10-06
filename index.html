@@ -59,8 +59,12 @@
       <div class="side-panel" id="panel-cards">
         <div class="cards-toolbar">
           <input type="search" id="recipeSearch" placeholder="Rezept suchen …" aria-label="Rezept suchen" />
+          <div class="view-toggle" role="group" aria-label="Ansicht">
+            <button class="active" data-view="cards" title="Karteikasten" aria-pressed="true">📇</button>
+            <button data-view="list" title="Einfache Liste" aria-pressed="false">☰</button>
+          </div>
           <button class="icon-btn" id="importBtn" title="Rezepte aus Excel importieren" aria-label="Rezepte aus Excel importieren">📥</button>
-          <button class="btn btn-primary btn-sm" id="newRecipeBtn">＋ Neues Rezept</button>
+          <button class="btn btn-primary btn-sm" id="newRecipeBtn" title="Neues Rezept anlegen">＋ Rezept</button>
         </div>
         <div class="tag-filter" id="tagFilter" aria-label="Nach Tags filtern"></div>
         <div class="cardbox" id="cardbox">

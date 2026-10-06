@@ -6,7 +6,7 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
 ## Funktionen
 
 - **Wochenkalender** (Mo–So × Frühstück, Mittagessen, Abendessen, Snack) mit Wochennavigation.
-- **Rezeptkartei**: Karten mit Registerreitern, nach Kategorie sortiert. Fährt man mit der Maus darüber,
+- **Rezeptkartei**: Karten mit Registerreitern, nach Kategorie sortiert – oder per Umschalter (📇 / ☰) als einfache Namensliste. Fährt man mit der Maus darüber,
   wird die Karte aus dem Register nach oben gezogen. Per **Drag & Drop** kommt sie in den Kalender.
   Einträge lassen sich zwischen Tagen verschieben oder zurück in die Kartei ziehen (entfernt sie).
   Portionen pro Eintrag mit −/+ anpassbar. Auf dem Handy: Karte antippen → „Einplanen …“.
