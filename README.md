@@ -11,7 +11,7 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   Einträge lassen sich zwischen Tagen verschieben oder zurück in die Kartei ziehen (entfernt sie).
   Portionen pro Eintrag mit −/+ anpassbar. Auf dem Handy: Karte antippen → „Einplanen …“.
 - **Rezept-Editor**: Mengen immer in **g** oder **Stück**. Nährwerte werden beim Tippen erkannt (✓ erkannt / ＋ Nährwerte).
-- **Einkaufsliste läuft automatisch mit**: jedes Rezept im Kalender landet sofort mit seinen Zutaten in der Liste; gleiche Zutaten werden addiert (gleiche Zutat + Einheit wird addiert),
+- **Einkaufsliste läuft automatisch mit**: jedes Rezept im Kalender landet sofort mit seinen Zutaten in der Liste; gleiche Zutat + Einheit wird addiert,
   skaliert nach Portionen. Einträge zum Abhaken, eigene Einträge möglich, Kopieren als Text.
 - **Live-Sync mit dem Kalender**: Rezepte bekommen einen **grünen** Rahmen, wenn alle Zutaten abgehakt sind,
   sonst einen **roten** (inkl. „3/5“-Zähler und Tooltip mit den fehlenden Zutaten).
