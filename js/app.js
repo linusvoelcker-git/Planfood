@@ -26,6 +26,9 @@
     }
   }
 
+  const phoneQuery = window.matchMedia('(max-width: 720px)');
+  const isPhone = () => phoneQuery.matches;
+
   const ui = {
     viewStart: S.currentWeekStart(),
     tab: 'cards',
@@ -34,7 +37,8 @@
     tagFilter: new Set(), // aktive Tag-Filter (UND-verknüpft)
     selectMode: false, // Listenansicht: mehrere Rezepte auswählen
     selected: new Set(),
-    cardView: loadPref('planfood:cardView', 'cards'), // 'cards' (Karteikasten) | 'list'
+    cardView: loadPref('planfood:cardView', isPhone() ? 'list' : 'cards'), // 'cards' (Karteikasten) | 'list'
+    mview: 'plan', // Handy: 'plan' | 'recipes' | 'shop'
     drag: null, // { type: 'recipe'|'entry', id }
   };
 
@@ -162,6 +166,8 @@
     const start = S.parseISO(ui.viewStart);
     const todayISO = S.isoDate(new Date());
     const totals = week ? S.dayTotals(week) : null;
+    cal.classList.toggle('mcal', isPhone());
+    if (isPhone()) return renderCalendarMobile(cal, week, ro, start, todayISO, totals);
 
     let html = '<div class="cal-corner"></div>';
     for (let d = 0; d < 7; d++) {
@@ -185,38 +191,59 @@
     }
 
     // Tagessumme – grün/rot je nachdem, ob die Tagesziele aus dem Profil erreicht werden
-    const goals = activeGoals('day');
     html += '<div class="cal-meal cal-total-label"><span>Tagessumme</span></div>';
+    for (let d = 0; d < 7; d++) html += dayTotalHTML(totals && totals[d]);
+
+    // Woche gesamt – Balken je Ziel (oder Summen, solange keine Ziele gesetzt sind)
+    html += '<div class="cal-meal cal-total-label cal-week-label"><span>Woche gesamt</span></div>';
+    html += `<div class="week-total">${weekBars(totals)}</div>`;
+    cal.innerHTML = html;
+  }
+
+  /** Handy: Tage untereinander, je Tag die vier Mahlzeiten als antippbare Felder. */
+  function renderCalendarMobile(cal, week, ro, start, todayISO, totals) {
+    let html = '';
     for (let d = 0; d < 7; d++) {
+      const date = S.addDays(start, d);
+      const isToday = S.isoDate(date) === todayISO;
+      html += `<section class="mday${isToday ? ' today' : ''}">
+        <header class="mday-head"><strong>${S.DAY_NAMES[d]}</strong><span>${date.getDate()}.${date.getMonth() + 1}.${isToday ? ' · heute' : ''}</span></header>`;
+      for (const meal of S.MEALS) {
+        const list = (week && week.slots[d] && week.slots[d][meal.key]) || [];
+        html += `<div class="slot mslot${ro ? ' readonly' : ''}" data-day="${d}" data-meal="${meal.key}">
+          <span class="mslot-label">${meal.label}</span>
+          <div class="mslot-entries">${list.map((e) => entryHTML(week, e, ro)).join('')}${
+          !list.length && !ro ? '<span class="mslot-hint">Rezept wählen</span>' : ''
+        }</div>
+          ${ro ? '' : '<span class="mslot-add" aria-hidden="true">＋</span>'}
+        </div>`;
+      }
       const t = totals && totals[d];
-      const kcal = t && t.values.kcal;
-      if (!kcal) {
-        html += '<div class="day-total"><span class="muted">–</span></div>';
-        continue;
-      }
-      if (!goals.length) {
-        html += `<div class="day-total"><strong>${fmtNum(kcal)} kcal</strong><span>${macroLine(t.values)}</span></div>`;
-        continue;
-      }
-      const checks = goals.map((g) => ({ ...g, value: t.values[g.key] || 0, ok: S.meetsGoal(t.values[g.key], g.goal) }));
-      const allOk = checks.every((c) => c.ok);
-      const kcalGoal = checks.find((c) => c.key === 'kcal');
-      const unit = (k) => (k === 'kcal' ? '' : ' g');
-      html += `<div class="day-total ${allOk ? 'day-ok' : 'day-bad'}" title="${esc(
-        checks.map((c) => `${N.NUTRIENTS.find((n) => n.key === c.key).label}: ${fmtNum(c.value)} / ${GOAL_HINT[c.goal.mode]} ${fmtNum(c.goal.target)}`).join('\n')
-      )}">
+      if (t && t.values.kcal) html += dayTotalHTML(t);
+      html += '</section>';
+    }
+    html += `<section class="mday mweek"><header class="mday-head"><strong>Woche gesamt</strong></header><div class="week-total">${weekBars(totals)}</div></section>`;
+    cal.innerHTML = html;
+  }
+
+  function dayTotalHTML(t) {
+    const kcal = t && t.values.kcal;
+    if (!kcal) return '<div class="day-total"><span class="muted">–</span></div>';
+    const goals = activeGoals('day');
+    if (!goals.length) return `<div class="day-total"><strong>${fmtNum(kcal)} kcal</strong><span>${macroLine(t.values)}</span></div>`;
+    const checks = goals.map((g) => ({ ...g, value: t.values[g.key] || 0, ok: S.meetsGoal(t.values[g.key], g.goal) }));
+    const allOk = checks.every((c) => c.ok);
+    const kcalGoal = checks.find((c) => c.key === 'kcal');
+    const unit = (k) => (k === 'kcal' ? '' : ' g');
+    return `<div class="day-total ${allOk ? 'day-ok' : 'day-bad'}" title="${esc(
+      checks.map((c) => `${N.NUTRIENTS.find((n) => n.key === c.key).label}: ${fmtNum(c.value)} / ${GOAL_HINT[c.goal.mode]} ${fmtNum(c.goal.target)}`).join('\n')
+    )}">
         <strong class="${kcalGoal ? (kcalGoal.ok ? 'ok' : 'bad') : ''}">${fmtNum(kcal)}${kcalGoal ? ` / ${fmtNum(kcalGoal.goal.target)}` : ''} kcal</strong>
         <span class="goal-lines">${checks
           .filter((c) => c.key !== 'kcal')
           .map((c) => `<span class="gl ${c.ok ? 'ok' : 'bad'}">${GOAL_SHORT[c.key]} ${fmtNum(c.value)}/${fmtNum(c.goal.target)}${unit(c.key)}</span>`)
           .join('')}</span>
       </div>`;
-    }
-
-    // Woche gesamt – Balken je Ziel (oder Summen, solange keine Ziele gesetzt sind)
-    html += '<div class="cal-meal cal-total-label cal-week-label"><span>Woche gesamt</span></div>';
-    html += `<div class="week-total">${weekBars(totals)}</div>`;
-    cal.innerHTML = html;
   }
 
   function weekBars(totals) {
@@ -453,6 +480,9 @@
 
     badge.hidden = !items.length;
     badge.textContent = `${done}/${items.length}`;
+    const navBadge = $('#navShopBadge');
+    navBadge.hidden = !(items.length - done);
+    navBadge.textContent = items.length - done;
     // kleiner Hüpfer, wenn neue Einträge dazukommen
     if (ui.lastOpen != null && ui.lastWeek === ui.viewStart && open > ui.lastOpen) {
       badge.classList.remove('bump');
@@ -521,6 +551,77 @@
           <button class="btn btn-sm" data-act="copy-list">📋 Als Text kopieren</button>
         </div>`
       }`;
+  }
+
+  /* ================= Rezept für ein Feld auswählen ================= */
+  function openPicker(day, meal) {
+    const dlg = $('#pickerDialog');
+    const date = S.addDays(S.parseISO(ui.viewStart), day);
+    const mealLabel = S.MEALS.find((m) => m.key === meal).label;
+    // passende Kategorie zuerst
+    const first = { breakfast: 'Frühstück', snack: 'Snack' }[meal] || 'Hauptgericht';
+    const cats = [first, ...S.CATEGORIES.filter((c) => c !== first)];
+    let q = '';
+    const render = () => {
+      const nq = N.norm(q);
+      const recipes = S.state.recipes.filter((r) => !nq || N.norm(r.name).includes(nq) || r.ingredients.some((i) => N.norm(i.name).includes(nq)));
+      $('#pickerList', dlg).innerHTML =
+        cats
+          .map((cat) => {
+            const items = recipes.filter((r) => (r.category || 'Sonstiges') === cat).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+            if (!items.length) return '';
+            return `<h4 class="rlist-head">${esc(cat)} <span>${items.length}</span></h4><ul class="rlist">${items
+              .map((r) => {
+                const kcal = S.recipePerServing(r).values.kcal;
+                return `<li class="ritem pick-item" tabindex="0" data-id="${r.id}" style="--c:${r.color}">
+                  <span class="ritem-name">${esc(r.name)}</span>
+                  <span class="rcard-dots">${tagsOf(r).map((t) => `<i style="--t:${t.color}"></i>`).join('')}</span>
+                  ${kcal ? `<span class="pick-kcal">${fmtNum(kcal)} kcal</span>` : ''}
+                </li>`;
+              })
+              .join('')}</ul>`;
+          })
+          .join('') || '<p class="muted pad">Kein Rezept gefunden.</p>';
+    };
+    dlg.innerHTML = `<div class="picker">
+      <header class="dialog-head"><div><h2>${S.DAY_NAMES[day]} · ${mealLabel}</h2>
+        <span class="muted">${date.getDate()}.${date.getMonth() + 1}. – Rezept antippen zum Einplanen</span></div>
+        <button class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body">
+        <input type="search" class="picker-search" placeholder="Rezept suchen …" aria-label="Rezept suchen" />
+        <div id="pickerList"></div>
+      </div>
+    </div>`;
+    render();
+    $('.picker-search', dlg).addEventListener('input', (ev) => {
+      q = ev.target.value;
+      render();
+    });
+    const pick = (el) => {
+      const r = S.state.recipes.find((x) => x.id === el.dataset.id);
+      S.addEntry(ui.viewStart, day, meal, r.id);
+      dlg.close();
+      toast(`${r.name} → ${S.DAY_NAMES[day]}, ${mealLabel}`);
+    };
+    dlg.onclick = (ev) => {
+      const item = ev.target.closest('.pick-item');
+      if (item) pick(item);
+    };
+    dlg.onkeydown = (ev) => {
+      const item = ev.target.closest('.pick-item');
+      if (item && ev.key === 'Enter') pick(item);
+    };
+    openDialog(dlg);
+  }
+
+  /* ================= Handy: Ansicht über die untere Leiste ================= */
+  function setMobileView(view) {
+    ui.mview = view;
+    document.body.dataset.mview = view;
+    $$('.mobile-nav button').forEach((b) => b.classList.toggle('active', b.dataset.mview === view));
+    if (view === 'recipes') setTab('cards');
+    if (view === 'shop') setTab('shopping');
+    window.scrollTo({ top: 0 });
   }
 
   function setTab(tab) {
@@ -1932,6 +2033,11 @@
       openDialog($('#archiveDialog'));
     });
     $('#settingsBtn').addEventListener('click', () => openSettings());
+    $$('.mobile-nav button').forEach((b) => b.addEventListener('click', () => setMobileView(b.dataset.mview)));
+    phoneQuery.addEventListener('change', () => {
+      setMobileView(ui.mview);
+      renderAll();
+    });
     $('#syncChip').addEventListener('click', () => openSettings({ focusSync: true }));
     $('#profileBtn').addEventListener('click', openProfile);
     $('#calendar').addEventListener('click', (ev) => {
@@ -2122,7 +2228,12 @@
     // Kalender: Einträge
     $('#calendar').addEventListener('click', (ev) => {
       const entry = ev.target.closest('.entry');
-      if (!entry) return;
+      if (!entry) {
+        // freie Fläche eines Feldes antippen → Rezept auswählen
+        const slot = ev.target.closest('.slot');
+        if (slot && !slot.classList.contains('readonly')) openPicker(Number(slot.dataset.day), slot.dataset.meal);
+        return;
+      }
       const uid = entry.dataset.uid;
       const act = ev.target.closest('[data-act]');
       const week = currentWeek();
@@ -2243,6 +2354,7 @@
   }
   setupEvents();
   setupDnD();
+  document.body.dataset.mview = ui.mview;
   renderAll();
   handleShareParams();
   handlePairingLink();

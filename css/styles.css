@@ -2455,3 +2455,248 @@ button.tag.active {
 .sync-guide a.btn {
   text-decoration: none;
 }
+
+/* ============ Rezept-Auswahl für ein Feld ============ */
+.picker-search {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  margin-bottom: 0.4rem;
+}
+.picker .rlist-head {
+  position: static;
+  background: transparent;
+}
+.pick-item {
+  cursor: pointer;
+}
+.pick-item .rcard-dots {
+  margin: 0;
+}
+.pick-kcal {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.slot:not(.readonly) {
+  cursor: pointer;
+}
+.slot:not(.readonly):hover .slot-empty {
+  color: var(--accent);
+}
+
+/* ============ Handy: Kalender als Tagesliste + untere Leiste ============ */
+.mobile-nav {
+  display: none;
+}
+@media (max-width: 720px) {
+  body {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  .mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 800;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-nav button {
+    border: none;
+    background: transparent;
+    padding: 0.45rem 0 0.55rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    position: relative;
+    cursor: pointer;
+  }
+  .mobile-nav button span {
+    font-size: 1.3rem;
+    line-height: 1.1;
+    filter: grayscale(0.6);
+    opacity: 0.8;
+  }
+  .mobile-nav button.active {
+    color: var(--accent);
+  }
+  .mobile-nav button.active span {
+    filter: none;
+    opacity: 1;
+  }
+  .nav-badge {
+    position: absolute;
+    top: 0.25rem;
+    left: calc(50% + 0.5rem);
+    background: var(--bad);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    padding: 0 0.35rem;
+    line-height: 1.3rem;
+    min-width: 1.3rem;
+  }
+
+  /* je nach Bereich nur Kalender, Rezepte oder Einkaufsliste */
+  body[data-mview='plan'] .side,
+  body[data-mview='recipes'] .planner,
+  body[data-mview='shop'] .planner {
+    display: none;
+  }
+  .side-tabs,
+  #generateListBtn {
+    display: none !important;
+  }
+
+  .calendar-scroll {
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .calendar.mcal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  .mday {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .mday.today {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+  .mday-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+  }
+  .mday.today .mday-head {
+    background: var(--accent-soft);
+  }
+  .mday-head strong {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+  }
+  .mday-head span {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .mday.today .mday-head span {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .mslot {
+    display: grid;
+    grid-template-columns: 5.6rem minmax(0, 1fr) 1.6rem;
+    gap: 0.5rem;
+    align-items: center;
+    min-height: 3.1rem;
+    padding: 0.45rem 0.7rem 0.45rem 0.85rem;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    flex-direction: row;
+  }
+  .mslot-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .mslot-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+  .mslot-hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    opacity: 0.7;
+  }
+  .mslot-add {
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .mslot .entry {
+    cursor: pointer;
+  }
+  .mslot .entry-remove {
+    opacity: 0.7;
+  }
+  .mday .day-total {
+    border-left: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.2rem 0.7rem;
+    padding: 0.55rem 0.85rem;
+  }
+  .mweek .week-total {
+    border: none;
+    grid-template-columns: 1fr;
+  }
+  .mweek .wbar {
+    grid-template-columns: 5.6rem minmax(40px, 1fr) auto;
+  }
+
+  /* Auswahl als Blatt von unten */
+  .dialog.sheet {
+    width: 100%;
+    max-width: none;
+    margin: auto 0 0;
+    border-radius: 18px 18px 0 0;
+    max-height: 88vh;
+  }
+  .dialog.sheet[open] {
+    animation: sheet-in 0.25s ease-out;
+  }
+  .dialog.sheet .picker {
+    display: flex;
+    flex-direction: column;
+    max-height: 88vh;
+  }
+  .cardbox {
+    height: calc(100vh - 260px);
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(40%);
+    opacity: 0.4;
+  }
+}
+.dialog > .picker {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+@media (max-width: 720px) {
+  .toast {
+    bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}

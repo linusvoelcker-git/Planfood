@@ -10,6 +10,9 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   wird die Karte aus dem Register nach oben gezogen. Per **Drag & Drop** kommt sie in den Kalender.
   Einträge lassen sich zwischen Tagen verschieben oder zurück in die Kartei ziehen (entfernt sie).
   Portionen pro Eintrag mit −/+ anpassbar. Auf dem Handy: Karte antippen → „Einplanen …“.
+- **Handy-Ansicht**: Kalender als Tagesliste (Mo–So untereinander). Ein Feld antippen → Rezept aus der nach Kategorie
+  sortierten Auswahl wählen (passende Kategorie zuerst, mit Suche). Untere Leiste: 📅 Plan · 📇 Rezepte · 🛒 Einkauf.
+  Auch am PC öffnet ein Klick auf ein freies Feld diese Auswahl.
 - **Tags & Filter**: farbige Tags wie *High Protein, Schnell, Vegan, Low Carb, Meal Prep, Günstig*.
   Im Rezept-Editor per Klick zuweisen oder neue anlegen; über der Kartei als Filter (mehrere = alle müssen passen).
   Farben/Namen unter ⚙︎ → *Tags verwalten*. Beim Excel-Import wird eine Spalte *Tags* (kommagetrennt) übernommen.

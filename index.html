@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#2a7d6b" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/styles.css?v=2026100807" />
+  <link rel="stylesheet" href="css/styles.css?v=2026100808" />
 </head>
 <body>
   <header class="topbar">
@@ -89,6 +89,16 @@
       </div>
     </aside>
   </main>
+
+  <!-- Handy: untere Leiste -->
+  <nav class="mobile-nav" aria-label="Bereiche">
+    <button data-mview="plan" class="active"><span>📅</span>Plan</button>
+    <button data-mview="recipes"><span>📇</span>Rezepte</button>
+    <button data-mview="shop"><span>🛒</span>Einkauf <b class="nav-badge" id="navShopBadge" hidden></b></button>
+  </nav>
+
+  <!-- Rezept für ein Feld auswählen -->
+  <dialog id="pickerDialog" class="dialog sheet"></dialog>
 
   <!-- Rezept-Detail -->
   <dialog id="detailDialog" class="dialog"></dialog>
@@ -177,12 +187,12 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/foods.js?v=2026100807"></script>
-  <script src="js/nutrition.js?v=2026100807"></script>
-  <script src="js/store.js?v=2026100807"></script>
-  <script src="js/sync.js?v=2026100807"></script>
-  <script src="js/textrecipe.js?v=2026100807"></script>
-  <script src="js/importer.js?v=2026100807"></script>
-  <script src="js/app.js?v=2026100807"></script>
+  <script src="js/foods.js?v=2026100808"></script>
+  <script src="js/nutrition.js?v=2026100808"></script>
+  <script src="js/store.js?v=2026100808"></script>
+  <script src="js/sync.js?v=2026100808"></script>
+  <script src="js/textrecipe.js?v=2026100808"></script>
+  <script src="js/importer.js?v=2026100808"></script>
+  <script src="js/app.js?v=2026100808"></script>
 </body>
 </html>
