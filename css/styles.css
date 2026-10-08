@@ -394,6 +394,367 @@ a {
 .day-total span {
   color: var(--muted);
 }
+/* Tagessumme mit Zielen: grün = alle erreicht, rot = mindestens eins nicht */
+.day-total.day-ok {
+  background: color-mix(in srgb, var(--ok) 16%, var(--surface));
+  box-shadow: inset 0 3px 0 var(--ok);
+}
+.day-total.day-bad {
+  background: color-mix(in srgb, var(--bad) 13%, var(--surface));
+  box-shadow: inset 0 3px 0 var(--bad);
+}
+.day-total strong.ok {
+  color: var(--ok);
+}
+.day-total strong.bad {
+  color: var(--bad);
+}
+.goal-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.45rem;
+}
+.day-total .gl {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.day-total .gl.ok {
+  color: var(--ok);
+}
+.day-total .gl.bad {
+  color: var(--bad);
+}
+.day-total .gl::before {
+  content: '✓ ';
+}
+.day-total .gl.bad::before {
+  content: '✗ ';
+}
+
+/* Woche gesamt */
+.cal-week-label {
+  border-top: 1px solid var(--line);
+}
+.week-total {
+  grid-column: 2 / -1;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  padding: 0.6rem 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 0.45rem 1.6rem;
+  align-items: center;
+  font-size: 0.8rem;
+}
+.week-plain {
+  color: var(--muted);
+}
+.week-days {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: -0.15rem;
+}
+.week-plain strong {
+  color: var(--text);
+}
+.wbar {
+  display: grid;
+  grid-template-columns: 6.6rem minmax(50px, 1fr) 8.6rem;
+  gap: 0.55rem;
+  align-items: center;
+}
+.wbar-label {
+  font-weight: 600;
+}
+.wbar-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.wbar-track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--ok);
+  transition: width 0.5s ease;
+}
+.wbar.bad .wbar-track i {
+  background: var(--bad);
+}
+/* Markierung bei 100 % des Ziels (Skala geht bis 125 %) */
+.wbar-track b {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  left: 80%;
+  width: 2px;
+  background: var(--text);
+  opacity: 0.55;
+}
+.wbar-val {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+}
+.wbar.ok .wbar-val {
+  color: var(--ok);
+}
+.wbar.bad .wbar-val {
+  color: var(--bad);
+}
+
+/* Profil */
+.bmi-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  margin-left: 0.15rem;
+  background: var(--surface-2);
+}
+.bmi-chip.ok {
+  color: var(--ok);
+}
+.bmi-chip.low,
+.bmi-chip.high {
+  color: var(--warn);
+}
+.bmi-chip.bad {
+  color: var(--bad);
+}
+.profile h3:first-child {
+  margin-top: 0;
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 0.8rem;
+}
+.profile-grid .span-2 {
+  grid-column: span 2;
+}
+.bmi-box {
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.6rem;
+}
+.bmi-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.bmi-value strong {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+.bmi-value.ok span {
+  color: var(--ok);
+  font-weight: 600;
+}
+.bmi-value.low span,
+.bmi-value.high span {
+  color: var(--warn);
+  font-weight: 600;
+}
+.bmi-value.bad span {
+  color: var(--bad);
+  font-weight: 600;
+}
+/* Skala 15–35: 18,5 = 17,5 %, 25 = 50 %, 30 = 75 % */
+.bmi-scale {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--warn) 70%, transparent) 0 17.5%,
+    color-mix(in srgb, var(--ok) 75%, transparent) 17.5% 50%,
+    color-mix(in srgb, var(--warn) 70%, transparent) 50% 75%,
+    color-mix(in srgb, var(--bad) 70%, transparent) 75% 100%
+  );
+}
+.bmi-scale i {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 18px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--surface-2);
+}
+.bmi-legend {
+  position: relative;
+  height: 1rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+.bmi-legend span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.bmi-legend span:nth-child(1) {
+  left: 0;
+  transform: none;
+}
+.bmi-legend span:nth-child(2) {
+  left: 17.5%;
+}
+.bmi-legend span:nth-child(3) {
+  left: 50%;
+}
+.bmi-legend span:nth-child(4) {
+  left: 75%;
+}
+.bmi-legend span:nth-child(5) {
+  left: 100%;
+  transform: translateX(-100%);
+}
+.weight-log {
+  margin-bottom: 0.5rem;
+  font-size: 0.88rem;
+}
+.weight-log summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.weight-log ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+  max-width: 280px;
+}
+.weight-log li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  border-bottom: 1px dashed var(--line);
+}
+.goal-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+.goal-row {
+  display: grid;
+  grid-template-columns: 8rem 8rem minmax(0, 1fr) 7.5rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+.goal-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.goal-row select,
+.goal-input input {
+  padding: 0.4rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  min-width: 0;
+  width: 100%;
+}
+.goal-input {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.goal-input small {
+  color: var(--muted);
+  min-width: 2rem;
+}
+
+/* Liste: Mehrfachauswahl & Löschen */
+.rlist-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 0 0.25rem;
+}
+.rlist-toolbar.selecting {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.5rem;
+}
+.rlist-count {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
+}
+.rlist-toolbar.selecting ~ .rlist-group .rlist-head {
+  top: 2.9rem;
+}
+.rlist-head[data-list-cat] {
+  cursor: pointer;
+}
+.ritem {
+  position: relative;
+}
+.ritem-name {
+  flex: 1;
+}
+.ritem-del {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.ritem:hover .ritem-del,
+.ritem:focus-within .ritem-del,
+.ritem-del:focus-visible {
+  opacity: 0.75;
+}
+.ritem-del:hover {
+  opacity: 1;
+  background: var(--bad-soft);
+}
+@media (hover: none) {
+  .ritem-del {
+    opacity: 0.6;
+  }
+}
+.rlist.selecting .ritem {
+  cursor: pointer;
+}
+.ritem-check {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 5px;
+  border: 2px solid var(--muted);
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.ritem.selected {
+  background: var(--accent-soft);
+}
+.ritem.selected .ritem-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ritem.selected .ritem-check::after {
+  content: '✓';
+  color: var(--accent-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
 
 /* Eintrag im Kalender */
 .entry {
@@ -1797,6 +2158,12 @@ button.tag.active {
   .detail-grid,
   .lookup-results {
     grid-template-columns: 1fr;
+  }
+  .profile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .goal-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .ing-row {
     grid-template-columns: minmax(0, 1fr) 70px 74px 1.8rem;

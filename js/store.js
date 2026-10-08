@@ -77,6 +77,7 @@ window.PF_STORE = (function () {
     state.weeks ||= {};
     state.settings ||= { usdaKey: '' };
     migrateTags();
+    migrateProfile();
     Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
     save(false);
@@ -108,12 +109,14 @@ window.PF_STORE = (function () {
     state.ingredients ||= {};
     state.settings ||= { usdaKey: '' };
     migrateTags();
+    migrateProfile();
     Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
     save();
   }
   function reset() {
     state = seed();
+    migrateProfile();
     save();
   }
 
@@ -149,6 +152,87 @@ window.PF_STORE = (function () {
       });
     }
     save();
+  }
+
+  function deleteRecipes(ids) {
+    const set = new Set(ids);
+    state.recipes = state.recipes.filter((r) => !set.has(r.id));
+    for (const week of Object.values(state.weeks)) {
+      if (week.archived) continue;
+      forEachSlot(week, (list, day, meal) => {
+        week.slots[day][meal] = list.filter((e) => !set.has(e.recipeId));
+      });
+    }
+    save();
+  }
+
+  /* ---------- Profil & Ziele ---------- */
+  // mode: 'min' = mindestens, 'max' = höchstens, 'target' = ungefähr (±10 %)
+  const GOAL_DEFS = [
+    { key: 'kcal', mode: 'target' },
+    { key: 'protein', mode: 'min' },
+    { key: 'carbs', mode: 'max' },
+    { key: 'fat', mode: 'max' },
+    { key: 'fiber', mode: 'min' },
+    { key: 'sugar', mode: 'max' },
+  ];
+  function migrateProfile() {
+    const p = (state.profile ||= {});
+    p.weightKg ??= null;
+    p.heightCm ??= null;
+    p.age ??= null;
+    p.sex ??= '';
+    p.activity ??= 1.55;
+    p.weightLog ||= [];
+    p.goals ||= {};
+    for (const g of GOAL_DEFS) p.goals[g.key] ||= { value: null, period: 'day', mode: g.mode };
+  }
+  function setProfile(changes) {
+    const p = state.profile;
+    const newWeight = changes.weightKg;
+    Object.assign(p, changes);
+    // Gewichtsverlauf: neuer Eintrag, wenn sich das Gewicht ändert (pro Tag höchstens einer)
+    if (newWeight > 0) {
+      const today = isoDate(new Date());
+      const last = p.weightLog[p.weightLog.length - 1];
+      if (last && last.date === today) last.kg = newWeight;
+      else if (!last || last.kg !== newWeight) p.weightLog.push({ date: today, kg: newWeight });
+    }
+    save();
+  }
+  function bmi(p = state.profile) {
+    if (!(p.weightKg > 0) || !(p.heightCm > 0)) return null;
+    const v = p.weightKg / (p.heightCm / 100) ** 2;
+    const cat =
+      v < 18.5 ? ['Untergewicht', 'low'] : v < 25 ? ['Normalgewicht', 'ok'] : v < 30 ? ['Übergewicht', 'high'] : ['Adipositas', 'bad'];
+    return { value: Math.round(v * 10) / 10, label: cat[0], level: cat[1] };
+  }
+  /** Tagesziel eines Nährwerts (Wochenziele werden auf 7 Tage verteilt). */
+  function dailyGoal(key) {
+    const g = state.profile.goals[key];
+    if (!g || !(g.value > 0)) return null;
+    return { target: g.period === 'week' ? g.value / 7 : g.value, mode: g.mode };
+  }
+  function weeklyGoal(key) {
+    const d = dailyGoal(key);
+    return d ? { target: d.target * 7, mode: d.mode } : null;
+  }
+  /** true = Ziel erfüllt, false = nicht erfüllt */
+  function meetsGoal(value, goal) {
+    const v = value || 0;
+    if (goal.mode === 'min') return v >= goal.target * 0.95;
+    if (goal.mode === 'max') return v <= goal.target * 1.05;
+    return Math.abs(v - goal.target) <= goal.target * 0.1;
+  }
+  /** Bedarf grob schätzen (Mifflin-St Jeor × Aktivität) und daraus Ziele vorschlagen. */
+  function suggestGoals(p = state.profile) {
+    if (!(p.weightKg > 0 && p.heightCm > 0 && p.age > 0) || !p.sex) return null;
+    const bmr = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age + (p.sex === 'm' ? 5 : -161);
+    const kcal = Math.round((bmr * (p.activity || 1.55)) / 50) * 50;
+    const protein = Math.round(p.weightKg * 1.6);
+    const fat = Math.round((kcal * 0.3) / 9);
+    const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+    return { kcal, protein, carbs, fat, fiber: 30, sugar: Math.round((kcal * 0.1) / 4) };
   }
 
   /* ---------- Tags ---------- */
@@ -658,6 +742,14 @@ window.PF_STORE = (function () {
     getRecipe,
     upsertRecipe,
     deleteRecipe,
+    deleteRecipes,
+    GOAL_DEFS,
+    setProfile,
+    bmi,
+    dailyGoal,
+    weeklyGoal,
+    meetsGoal,
+    suggestGoals,
     ingredientInfo,
     setIngredientInfo,
     knownIngredientNames,

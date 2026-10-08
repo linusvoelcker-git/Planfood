@@ -32,6 +32,8 @@
     search: '',
     detail: null, // { recipeId, entryUid }
     tagFilter: new Set(), // aktive Tag-Filter (UND-verknüpft)
+    selectMode: false, // Listenansicht: mehrere Rezepte auswählen
+    selected: new Set(),
     cardView: loadPref('planfood:cardView', 'cards'), // 'cards' (Karteikasten) | 'list'
     drag: null, // { type: 'recipe'|'entry', id }
   };
@@ -61,6 +63,13 @@
     const half = Math.abs(amount - whole - 0.5) < 0.01;
     const text = half ? `${whole || ''}½` : fmtNum(amount, 2);
     return `${text} Stück`;
+  }
+
+  const GOAL_SHORT = { kcal: 'kcal', protein: 'E', carbs: 'KH', fat: 'F', fiber: 'Bal', sugar: 'Zucker' };
+  const GOAL_HINT = { min: 'mindestens', max: 'höchstens', target: 'ungefähr' };
+  /** Ziele mit Wert (Tag oder Woche) */
+  function activeGoals(which = 'day') {
+    return S.GOAL_DEFS.map((g) => ({ key: g.key, goal: which === 'day' ? S.dailyGoal(g.key) : S.weeklyGoal(g.key) })).filter((g) => g.goal);
   }
 
   function macroLine(values) {
@@ -125,6 +134,8 @@
 
   /* ================= Kopfzeile ================= */
   function renderHeader() {
+    const b = S.bmi();
+    $('#profileBtn').innerHTML = `👤 Profil${b ? ` <span class="bmi-chip ${b.level}">BMI ${fmtNum(b.value, 1)}</span>` : ''}`;
     const { kw, range } = weekLabel(ui.viewStart);
     $('#weekTitle').textContent = kw;
     $('#weekRange').textContent = range;
@@ -173,15 +184,66 @@
       }
     }
 
+    // Tagessumme – grün/rot je nachdem, ob die Tagesziele aus dem Profil erreicht werden
+    const goals = activeGoals('day');
     html += '<div class="cal-meal cal-total-label"><span>Tagessumme</span></div>';
     for (let d = 0; d < 7; d++) {
       const t = totals && totals[d];
       const kcal = t && t.values.kcal;
-      html += `<div class="day-total">${
-        kcal ? `<strong>${fmtNum(kcal)} kcal</strong><span>${macroLine(t.values)}</span>` : '<span class="muted">–</span>'
-      }</div>`;
+      if (!kcal) {
+        html += '<div class="day-total"><span class="muted">–</span></div>';
+        continue;
+      }
+      if (!goals.length) {
+        html += `<div class="day-total"><strong>${fmtNum(kcal)} kcal</strong><span>${macroLine(t.values)}</span></div>`;
+        continue;
+      }
+      const checks = goals.map((g) => ({ ...g, value: t.values[g.key] || 0, ok: S.meetsGoal(t.values[g.key], g.goal) }));
+      const allOk = checks.every((c) => c.ok);
+      const kcalGoal = checks.find((c) => c.key === 'kcal');
+      const unit = (k) => (k === 'kcal' ? '' : ' g');
+      html += `<div class="day-total ${allOk ? 'day-ok' : 'day-bad'}" title="${esc(
+        checks.map((c) => `${N.NUTRIENTS.find((n) => n.key === c.key).label}: ${fmtNum(c.value)} / ${GOAL_HINT[c.goal.mode]} ${fmtNum(c.goal.target)}`).join('\n')
+      )}">
+        <strong class="${kcalGoal ? (kcalGoal.ok ? 'ok' : 'bad') : ''}">${fmtNum(kcal)}${kcalGoal ? ` / ${fmtNum(kcalGoal.goal.target)}` : ''} kcal</strong>
+        <span class="goal-lines">${checks
+          .filter((c) => c.key !== 'kcal')
+          .map((c) => `<span class="gl ${c.ok ? 'ok' : 'bad'}">${GOAL_SHORT[c.key]} ${fmtNum(c.value)}/${fmtNum(c.goal.target)}${unit(c.key)}</span>`)
+          .join('')}</span>
+      </div>`;
     }
+
+    // Woche gesamt – Balken je Ziel (oder Summen, solange keine Ziele gesetzt sind)
+    html += '<div class="cal-meal cal-total-label cal-week-label"><span>Woche gesamt</span></div>';
+    html += `<div class="week-total">${weekBars(totals)}</div>`;
     cal.innerHTML = html;
+  }
+
+  function weekBars(totals) {
+    const sum = N.emptyTotals();
+    (totals || []).forEach((d) => N.mergeTotals(sum, d));
+    const goals = activeGoals('week');
+    if (!goals.length) {
+      return `<div class="week-plain">${
+        sum.values.kcal ? `<strong>${fmtNum(sum.values.kcal)} kcal</strong> · ${macroLine(sum.values)}` : '<span class="muted">Noch nichts geplant</span>'
+      }</div><button class="btn btn-sm" data-act="open-profile">🎯 Ziele im Profil festlegen</button>`;
+    }
+    const planned = (totals || []).filter((d) => d.values.kcal).length;
+    const daysNote = `<div class="week-days">Ziele für die ganze Woche · ${planned} von 7 Tagen geplant</div>`;
+    return daysNote + goals
+      .map(({ key, goal }) => {
+        const v = sum.values[key] || 0;
+        const ok = S.meetsGoal(v, goal);
+        const def = N.NUTRIENTS.find((n) => n.key === key);
+        // Skala bis 125 % des Ziels; Markierung = Ziel
+        const fill = Math.min(1, v / (goal.target * 1.25)) * 100;
+        return `<div class="wbar ${ok ? 'ok' : 'bad'}" title="${esc(def.label)}: ${GOAL_HINT[goal.mode]} ${fmtNum(goal.target)} ${def.unit} pro Woche">
+          <span class="wbar-label">${esc(def.label)}</span>
+          <span class="wbar-track"><i style="width:${fill}%"></i><b></b></span>
+          <span class="wbar-val">${fmtNum(v)} / ${fmtNum(goal.target)} ${def.unit}</span>
+        </div>`;
+      })
+      .join('');
   }
 
   function entryHTML(week, e, ro) {
@@ -304,18 +366,50 @@
 
   /** Einfache Liste: nur Namen, nach Kategorie gruppiert, ebenfalls ziehbar. */
   function renderRecipeList(recipes) {
-    let html = '';
+    // Auswahl auf vorhandene Rezepte beschränken
+    for (const id of ui.selected) if (!S.state.recipes.some((r) => r.id === id)) ui.selected.delete(id);
+    const sel = ui.selectMode;
+    const n = ui.selected.size;
+    let html = sel
+      ? `<div class="rlist-toolbar selecting">
+          ${
+            recipes.length && recipes.every((r) => ui.selected.has(r.id))
+              ? '<button class="btn btn-sm" data-list="none">Keine</button>'
+              : '<button class="btn btn-sm" data-list="all">Alle</button>'
+          }
+          <span class="rlist-count">${n} ausgewählt</span>
+          <button class="btn btn-sm btn-danger" data-list="delete" ${n ? '' : 'disabled'}>🗑 Löschen</button>
+          <button class="btn btn-sm btn-primary" data-list="done">Fertig</button>
+        </div>`
+      : `<div class="rlist-toolbar"><button class="btn btn-sm btn-ghost" data-list="select">☑ Mehrere auswählen</button></div>`;
     for (const cat of S.CATEGORIES) {
       const items = recipes.filter((r) => (r.category || 'Sonstiges') === cat).sort((a, b) => a.name.localeCompare(b.name, 'de'));
       if (!items.length) continue;
-      html += `<section class="rlist-group"><h4 class="rlist-head">${esc(cat)} <span>${items.length}</span></h4><ul class="rlist">${items
-        .map(
-          (r) =>
-            `<li class="ritem" draggable="true" tabindex="0" data-id="${r.id}" style="--c:${r.color}"><span class="ritem-name">${esc(r.name)}</span></li>`
-        )
+      html += `<section class="rlist-group"><h4 class="rlist-head" ${sel ? `data-list-cat="${esc(cat)}" title="Ganze Kategorie auswählen"` : ''}>${esc(cat)} <span>${items.length}</span></h4><ul class="rlist${sel ? ' selecting' : ''}">${items
+        .map((r) => {
+          const on = ui.selected.has(r.id);
+          return `<li class="ritem${on ? ' selected' : ''}" ${sel ? `aria-selected="${on}"` : 'draggable="true"'} tabindex="0" data-id="${r.id}" style="--c:${r.color}">
+            ${sel ? '<span class="ritem-check" aria-hidden="true"></span>' : ''}
+            <span class="ritem-name">${esc(r.name)}</span>
+            ${sel ? '' : `<button class="ritem-del" data-del="${r.id}" title="Rezept löschen" aria-label="${esc(r.name)} löschen">🗑</button>`}
+          </li>`;
+        })
         .join('')}</ul></section>`;
     }
     return html;
+  }
+
+  function confirmDelete(ids) {
+    const names = ids.map((id) => (S.state.recipes.find((r) => r.id === id) || {}).name).filter(Boolean);
+    if (!names.length) return false;
+    const msg =
+      names.length === 1
+        ? `Rezept „${names[0]}“ löschen?`
+        : `${names.length} Rezepte löschen?\n\n${names.slice(0, 12).join('\n')}${names.length > 12 ? `\n… und ${names.length - 12} weitere` : ''}`;
+    if (!confirm(msg + '\n\nSie werden auch aus offenen Wochen entfernt (archivierte Wochen behalten sie).')) return false;
+    S.deleteRecipes(ids);
+    toast(names.length === 1 ? 'Rezept gelöscht' : `${names.length} Rezepte gelöscht`);
+    return true;
   }
 
   /** Filterleiste über der Kartei: Tags als farbige Chips mit Trefferanzahl. */
@@ -1191,6 +1285,125 @@
     window.PF_IMPORT.loadLib().catch(() => {}); // schon mal vorladen
   }
 
+  /* ================= Profil ================= */
+  function openProfile() {
+    const dlg = $('#profileDialog');
+    const p = S.state.profile;
+    const goalRows = S.GOAL_DEFS.map(({ key }) => {
+      const def = N.NUTRIENTS.find((n) => n.key === key);
+      const g = p.goals[key];
+      return `<div class="goal-row" data-key="${key}">
+        <span class="goal-name">${def.label}</span>
+        <select name="mode-${key}" aria-label="Art des Ziels für ${def.label}">
+          ${Object.entries(GOAL_HINT).map(([m, l]) => `<option value="${m}" ${g.mode === m ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <span class="goal-input"><input type="number" min="0" step="any" name="goal-${key}" value="${g.value ?? ''}" placeholder="–" aria-label="Zielwert ${def.label}" /><small>${def.unit}</small></span>
+        <select name="period-${key}" aria-label="Zeitraum für ${def.label}">
+          <option value="day" ${g.period === 'day' ? 'selected' : ''}>pro Tag</option>
+          <option value="week" ${g.period === 'week' ? 'selected' : ''}>pro Woche</option>
+        </select>
+      </div>`;
+    }).join('');
+    const log = [...p.weightLog].reverse().slice(0, 8);
+
+    dlg.innerHTML = `<form method="dialog" class="profile">
+      <header class="dialog-head"><div><h2>👤 Mein Profil</h2>
+        <span class="muted">Wird nur in diesem Browser gespeichert</span></div>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body">
+        <h3>Körperdaten</h3>
+        <div class="profile-grid">
+          <label class="field"><span>Gewicht <small>kg</small></span><input type="number" min="20" max="400" step="0.1" name="weightKg" value="${p.weightKg ?? ''}" /></label>
+          <label class="field"><span>Größe <small>cm</small></span><input type="number" min="100" max="250" step="1" name="heightCm" value="${p.heightCm ?? ''}" /></label>
+          <label class="field"><span>Alter</span><input type="number" min="10" max="120" step="1" name="age" value="${p.age ?? ''}" /></label>
+          <label class="field"><span>Geschlecht</span><select name="sex">
+            <option value="" ${!p.sex ? 'selected' : ''}>–</option>
+            <option value="w" ${p.sex === 'w' ? 'selected' : ''}>weiblich</option>
+            <option value="m" ${p.sex === 'm' ? 'selected' : ''}>männlich</option></select></label>
+          <label class="field span-2"><span>Aktivität</span><select name="activity">
+            ${[
+              [1.2, 'kaum Bewegung (Bürojob, kein Sport)'],
+              [1.375, 'leicht aktiv (1–2× Sport/Woche)'],
+              [1.55, 'mäßig aktiv (3–5× Sport/Woche)'],
+              [1.725, 'sehr aktiv (6–7× Sport/Woche)'],
+              [1.9, 'extrem aktiv (körperliche Arbeit + Sport)'],
+            ]
+              .map(([v, l]) => `<option value="${v}" ${Number(p.activity) === v ? 'selected' : ''}>${l}</option>`)
+              .join('')}</select></label>
+        </div>
+        <div class="bmi-box" id="bmiBox"></div>
+        ${
+          log.length
+            ? `<details class="weight-log"><summary>Gewichtsverlauf (${p.weightLog.length})</summary><ul>${log
+                .map((e) => `<li><span>${S.parseISO(e.date).toLocaleDateString('de-DE')}</span><strong>${fmtNum(e.kg, 1)} kg</strong></li>`)
+                .join('')}</ul></details>`
+            : ''
+        }
+
+        <h3>Ziele</h3>
+        <p class="muted small">Die Tagessumme im Kalender wird grün, wenn alle Ziele des Tages erreicht sind, sonst rot.
+          Wochenziele werden auf 7 Tage verteilt. „Ungefähr“ heißt ±10 %, „mindestens“/„höchstens“ mit 5 % Spielraum. Leer = kein Ziel.</p>
+        <div class="goal-table">${goalRows}</div>
+        <button type="button" class="btn btn-sm" data-act="suggest">✨ Vorschlag aus Körperdaten</button>
+        <p class="muted small" id="suggestHint">Grobe Schätzung (Mifflin-St Jeor × Aktivität, 1,6 g Eiweiß/kg, 30 % Fett) – braucht Gewicht, Größe, Alter und Geschlecht. Ersetzt keine Beratung.</p>
+      </div>
+      <footer class="dialog-foot"><button type="button" class="btn" data-close>Abbrechen</button><button class="btn btn-primary">Speichern</button></footer>
+    </form>`;
+
+    const form = $('form', dlg);
+    const read = () => {
+      const num = (n) => {
+        const v = parseFloat(String(form[n].value).replace(',', '.'));
+        return v > 0 ? v : null;
+      };
+      return {
+        weightKg: num('weightKg'),
+        heightCm: num('heightCm'),
+        age: num('age'),
+        sex: form.sex.value,
+        activity: parseFloat(form.activity.value),
+      };
+    };
+    const renderBmi = () => {
+      const b = S.bmi(read());
+      // Skala 15–35, Bereiche: <18,5 | 18,5–25 | 25–30 | >30
+      $('#bmiBox', dlg).innerHTML = b
+        ? `<div class="bmi-value ${b.level}"><strong>BMI ${fmtNum(b.value, 1)}</strong><span>${b.label}</span></div>
+           <div class="bmi-scale"><i style="left:${Math.min(100, Math.max(0, ((b.value - 15) / 20) * 100))}%"></i></div>
+           <div class="bmi-legend"><span>15</span><span>18,5</span><span>25</span><span>30</span><span>35</span></div>`
+        : '<span class="muted small">BMI erscheint, sobald Gewicht und Größe eingetragen sind.</span>';
+    };
+    form.addEventListener('input', (ev) => {
+      if (['weightKg', 'heightCm'].includes(ev.target.name)) renderBmi();
+    });
+    dlg.onclick = (ev) => {
+      if (!ev.target.closest('[data-act="suggest"]')) return;
+      const sug = S.suggestGoals(read());
+      if (!sug) {
+        $('#suggestHint', dlg).innerHTML = '<span class="warn">Bitte zuerst Gewicht, Größe, Alter und Geschlecht eintragen.</span>';
+        return;
+      }
+      for (const [k, v] of Object.entries(sug)) {
+        form['goal-' + k].value = v;
+        form['period-' + k].value = 'day';
+      }
+      $('#suggestHint', dlg).innerHTML = `Vorschlag eingetragen (≈ ${fmtNum(sug.kcal)} kcal/Tag) – du kannst alles noch anpassen und dann speichern.`;
+    };
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const goals = {};
+      for (const { key } of S.GOAL_DEFS) {
+        const v = parseFloat(String(form['goal-' + key].value).replace(',', '.'));
+        goals[key] = { value: v > 0 ? v : null, period: form['period-' + key].value, mode: form['mode-' + key].value };
+      }
+      S.setProfile({ ...read(), goals });
+      dlg.close();
+      toast('Profil gespeichert');
+    });
+    renderBmi();
+    openDialog(dlg);
+  }
+
   /* ================= Einstellungen ================= */
   function openSettings() {
     const dlg = $('#settingsDialog');
@@ -1384,11 +1597,17 @@
       openDialog($('#archiveDialog'));
     });
     $('#settingsBtn').addEventListener('click', openSettings);
+    $('#profileBtn').addEventListener('click', openProfile);
+    $('#calendar').addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-act="open-profile"]')) openProfile();
+    });
     $('#newRecipeBtn').addEventListener('click', () => openEditor());
     $('#importBtn').addEventListener('click', openImport);
     $$('.view-toggle button').forEach((b) =>
       b.addEventListener('click', () => {
         ui.cardView = b.dataset.view;
+        ui.selectMode = false;
+        ui.selected.clear();
         savePref('planfood:cardView', ui.cardView);
         renderCards();
       })
@@ -1424,8 +1643,41 @@
 
     // Kartei: Klick / Enter öffnet das Rezept
     $('#cardboxInner').addEventListener('click', (ev) => {
+      const listBtn = ev.target.closest('[data-list]');
+      if (listBtn) {
+        const act = listBtn.dataset.list;
+        const visible = $$('#cardboxInner .ritem').map((el) => el.dataset.id);
+        if (act === 'select') ui.selectMode = true;
+        if (act === 'done') (ui.selectMode = false), ui.selected.clear();
+        if (act === 'all') visible.forEach((id) => ui.selected.add(id));
+        if (act === 'none') ui.selected.clear();
+        if (act === 'delete' && confirmDelete([...ui.selected])) (ui.selected.clear(), (ui.selectMode = false));
+        renderCards();
+        return;
+      }
+      const del = ev.target.closest('[data-del]');
+      if (del) {
+        confirmDelete([del.dataset.del]);
+        return;
+      }
+      const head = ev.target.closest('[data-list-cat]');
+      if (head && ui.selectMode) {
+        const ids = $$('.ritem', head.parentElement).map((el) => el.dataset.id);
+        const all = ids.every((id) => ui.selected.has(id));
+        ids.forEach((id) => (all ? ui.selected.delete(id) : ui.selected.add(id)));
+        renderCards();
+        return;
+      }
       const card = ev.target.closest('.rcard, .ritem');
-      if (card) openDetail(card.dataset.id);
+      if (!card) return;
+      if (ui.selectMode && card.classList.contains('ritem')) {
+        const id = card.dataset.id;
+        ui.selected.has(id) ? ui.selected.delete(id) : ui.selected.add(id);
+        renderCards();
+        $(`#cardboxInner .ritem[data-id="${id}"]`)?.focus();
+        return;
+      }
+      openDetail(card.dataset.id);
     });
     // Karte nur so weit herausziehen, wie oben im Kasten Platz ist (sonst wird der Reiter abgeschnitten)
     const LIFT = 180; // Kartenhöhe (200) − Reiterhöhe der nächsten Karte (20) → Karte ganz über der nächsten
@@ -1497,6 +1749,11 @@
     });
     $('#cardboxInner').addEventListener('keydown', (ev) => {
       const card = ev.target.closest('.rcard, .ritem');
+      if (card && ui.selectMode && card.classList.contains('ritem') && (ev.key === ' ' || ev.key === 'Enter')) {
+        ev.preventDefault();
+        card.click();
+        return;
+      }
       if (card && ev.key === 'Enter') openDetail(card.dataset.id);
     });
 

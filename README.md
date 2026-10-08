@@ -25,6 +25,12 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   (Spalten *Gericht, Zutat, Menge, Einheit*, optional *Zubereitung, Portionen, Kategorie, Tag, Mahlzeit*, Nährwert-Spalten)
   und formt daraus einzelne Rezepte. Ein Blatt mit *Zutat + Nährwerten pro 100 g* wird als Nährwertquelle übernommen,
   *Tag/Mahlzeit* auf Wunsch als Wochenplan. Vorlage zum Herunterladen im Import-Dialog.
+- **Profil** (👤): Gewicht, Größe, Alter, Geschlecht, Aktivität → **BMI** mit Skala und Gewichtsverlauf.
+  **Ziele** für Energie, Eiweiß, Kohlenhydrate, Fett, Ballaststoffe, Zucker – pro Tag oder pro Woche, als
+  *mindestens*, *höchstens* oder *ungefähr*; optional als Vorschlag aus den Körperdaten berechnet.
+  Die **Tagessumme** im Kalender wird grün (alle Ziele erreicht) oder rot, darunter zeigt **„Woche gesamt“**
+  Balken mit Wochensumme gegenüber dem Wochenziel.
+- **Rezepte löschen** in der Listenansicht: 🗑 je Rezept oder „Mehrere auswählen“ (auch ganze Kategorien) und gemeinsam löschen.
 - **Nährwerte**: pro Portion, pro Tag und pro Woche (Makros + Mikronährstoffe, sobald Daten vorhanden sind).
 
 ## Starten
