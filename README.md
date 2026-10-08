@@ -49,9 +49,11 @@ Branch `main`, Ordner `/ (root)` → *Save*. Nach ca. 1 Minute läuft die Seite 
 
 Kostenlos über ein **privates GitHub-Repository** – ohne eigenen Server. Einmal am PC einrichten (⚙︎ → *Geräte-Sync* oder ☁ oben):
 
-1. Privates Repository `planfood-daten` anlegen.
-2. Fine-grained Token erstellen: nur dieses Repository, *Contents: Read and write*.
-3. Token in Planfood einfügen → *Verbinden*.
+1. **Privaten Ordner anlegen** (auf GitHub ein privates Repository `planfood-daten`).
+2. **Zugangsschlüssel erstellen** (Fine-grained Token: nur dieser Ordner, *Contents: Read and write*).
+3. **Schlüssel in Planfood einfügen** → *Verbinden*.
+
+Die Einstellungen führen mit Knöpfen und genauen Klick-Anweisungen durch alle drei Schritte.
 
 Weitere Geräte: ⚙︎ → *📱 Weiteres Gerät verbinden* → QR-Code mit dem Handy scannen (oder Link öffnen) – fertig.
 Änderungen werden nach ein paar Sekunden hochgeladen und beim Öffnen/Zurückkehren abgeholt; jede Version liegt als

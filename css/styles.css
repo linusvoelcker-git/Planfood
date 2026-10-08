@@ -2389,3 +2389,54 @@ button.tag.active {
   border-bottom: 1px dashed var(--line);
   font-size: 0.85rem;
 }
+.sync-guide {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 0.4rem 0 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.sync-guide > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.65rem 0.8rem 0.7rem 2.6rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.sync-guide > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0.75rem;
+  top: 0.65rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: grid;
+  place-items: center;
+}
+.sync-guide ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  line-height: 1.5;
+}
+.sync-guide .sync-form {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.sync-advanced summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.sync-guide a.btn {
+  text-decoration: none;
+}

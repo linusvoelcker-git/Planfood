@@ -1537,20 +1537,41 @@
         </div>`;
       return;
     }
-    box.innerHTML = `<p class="muted small">Damit PC und Handy dieselben Daten haben: Planfood speichert sie (kostenlos) als Datei in einem <b>privaten GitHub-Repository</b>. Einmal einrichten:</p>
-      <ol class="sync-steps small">
-        <li><a href="https://github.com/new?name=planfood-daten&visibility=private&description=Planfood%20Daten" target="_blank" rel="noopener">Privates Repository „planfood-daten“ anlegen</a> (Häkchen bei „Private“).</li>
-        <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Token erstellen</a> (Fine-grained): <em>Repository access</em> → „Only select repositories“ → <code>planfood-daten</code>; <em>Permissions → Contents</em> → „Read and write“. Ablaufdatum z. B. 1 Jahr.</li>
-        <li>Token hier einfügen und verbinden – auf PC <b>und</b> Handy.</li>
+    box.innerHTML = `<p class="small">So hast du auf PC und Handy dieselben Rezepte und Pläne. Planfood legt sie dazu in deinem
+        kostenlosen GitHub-Konto in einem <b>privaten Ordner</b> ab, den nur du sehen kannst.
+        Das richtest du <b>einmal am PC</b> ein (ca. 3 Minuten). Dein Handy verbindest du danach einfach per QR-Code.</p>
+      <ol class="sync-guide">
+        <li>
+          <strong>Privaten Ordner anlegen</strong>
+          <a class="btn btn-sm" href="https://github.com/new?name=planfood-daten&visibility=private&description=Planfood%20Daten" target="_blank" rel="noopener">GitHub öffnen ↗</a>
+          <span class="muted small">Der Name „planfood-daten“ ist schon eingetragen. Prüfen, dass <b>Private</b> ausgewählt ist,
+            dann unten auf den grünen Knopf <b>„Create repository“</b> klicken.</span>
+        </li>
+        <li>
+          <strong>Zugangsschlüssel erstellen</strong>
+          <a class="btn btn-sm" href="https://github.com/settings/personal-access-tokens/new?name=Planfood&description=Planfood%20Ger%C3%A4te-Sync&expires_in=365&contents=write" target="_blank" rel="noopener">GitHub öffnen ↗</a>
+          <span class="muted small">Damit darf Planfood (nur) in diesen Ordner schreiben. Auf der Seite:</span>
+          <ul class="small">
+            <li>Bei <b>„Repository access“</b> → <b>„Only select repositories“</b> wählen und <b>planfood-daten</b> auswählen.</li>
+            <li>Bei <b>„Permissions“</b> → <b>„Repository permissions“</b> aufklappen → bei <b>„Contents“</b> auf <b>„Read and write“</b> stellen
+              (falls nicht schon eingestellt).</li>
+            <li>Ganz unten <b>„Generate token“</b> klicken und den angezeigten Schlüssel (beginnt mit <code>github_pat_</code>) <b>kopieren</b>.</li>
+          </ul>
+        </li>
+        <li>
+          <strong>Schlüssel hier einfügen</strong>
+          <div class="sync-form">
+            <label class="field small"><span>Zugangsschlüssel</span><input type="password" name="syncToken" autocomplete="off" placeholder="github_pat_…" /></label>
+            <button type="button" class="btn btn-primary btn-sm" data-sync="connect">Verbinden</button>
+          </div>
+          <details class="small sync-advanced"><summary>Anderer Ordnername?</summary>
+            <label class="field small"><span>Ordner (Repository)</span><input name="syncRepo" value="planfood-daten" autocomplete="off" /></label>
+          </details>
+        </li>
       </ol>
-      <div class="sync-form">
-        <label class="field small"><span>Token</span><input type="password" name="syncToken" autocomplete="off" placeholder="github_pat_…" /></label>
-        <label class="field small"><span>Repository</span><input name="syncRepo" value="planfood-daten" autocomplete="off" /></label>
-        <button type="button" class="btn btn-primary btn-sm" data-sync="connect">Verbinden</button>
-      </div>
       <div id="syncChoice"></div>
       <p class="warn small" id="syncMsg" hidden></p>
-      <p class="muted small">Der Token bleibt nur auf diesem Gerät gespeichert und wird nicht mitsynchronisiert.</p>`;
+      <p class="muted small">Den Schlüssel speichert Planfood nur auf diesem Gerät. Er läuft nach einem Jahr ab – dann einfach einen neuen erstellen und hier einfügen.</p>`;
   }
 
   async function handleSyncAction(act, dlg) {
@@ -1680,7 +1701,7 @@
       <header class="dialog-head"><h2>⚙︎ Einstellungen &amp; Daten</h2>
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
       <div class="dialog-body">
-        <div class="field" id="syncSection"><span>☁ Geräte-Sync (PC ↔ Handy)</span>
+        <div class="field" id="syncSection"><span>☁ PC und Handy verbinden</span>
           <div id="syncBox"></div>
         </div>
         <label class="field"><span>USDA FoodData Central API-Key <small>(optional)</small></span>

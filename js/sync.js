@@ -64,8 +64,8 @@ window.PF_SYNC = (function () {
     } catch {
       /* egal */
     }
-    if (res.status === 401) return new Error('Token ungültig oder abgelaufen');
-    if (res.status === 403) return new Error(`Keine Berechtigung (${what}) – hat der Token „Contents: Read and write“?`);
+    if (res.status === 401) return new Error('Der Zugangsschlüssel stimmt nicht oder ist abgelaufen – bitte neu kopieren bzw. einen neuen erstellen.');
+    if (res.status === 403) return new Error(`Keine Berechtigung (${what}) – beim Schlüssel muss „planfood-daten“ ausgewählt und „Contents“ auf „Read and write“ gestellt sein.`);
     if (res.status === 404) return new Error(`${what} nicht gefunden`);
     return new Error(`${what}: HTTP ${res.status} ${detail}`);
   }
@@ -208,10 +208,10 @@ window.PF_SYNC = (function () {
     if (repo.includes('/')) [owner, repo] = repo.split('/');
     else owner = login;
     const r = await api(`/repos/${owner}/${repo}`, { token });
-    if (r.status === 404) throw new Error(`Repository „${owner}/${repo}“ nicht gefunden – bitte erst anlegen (privat) und dem Token Zugriff darauf geben.`);
+    if (r.status === 404) throw new Error(`Der Ordner „${repo}“ wurde nicht gefunden – bitte Schritt 1 erledigen und beim Schlüssel genau diesen Ordner auswählen.`);
     if (!r.ok) throw await apiError(r, 'Repository');
     const info = await r.json();
-    if (!info.private) throw new Error(`„${owner}/${repo}“ ist öffentlich – bitte ein privates Repository verwenden, sonst wären deine Daten für alle sichtbar.`);
+    if (!info.private) throw new Error(`Der Ordner „${repo}“ ist öffentlich – bitte auf GitHub unter Settings auf „Private“ stellen, sonst wären deine Daten für alle sichtbar.`);
     const candidate = { token, owner, repo, sha: null, etag: null, syncedAt: 0 };
     const prev = cfg;
     cfg = candidate;
