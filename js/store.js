@@ -28,6 +28,7 @@ window.PF_STORE = (function () {
 
   let state = null;
   const listeners = new Set();
+  const localListeners = new Set();
 
   /* ---------- IDs & Datum ---------- */
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -73,28 +74,54 @@ window.PF_STORE = (function () {
       console.warn('Konnte gespeicherte Daten nicht lesen', e);
     }
     if (!state || !Array.isArray(state.recipes)) state = seed();
-    state.ingredients ||= {};
-    state.weeks ||= {};
-    state.settings ||= { usdaKey: '' };
-    migrateTags();
-    migrateProfile();
-    Object.values(state.weeks).forEach(migrateShopping);
-    autoArchive();
+    normalize();
     save(false);
     return state;
   }
 
-  function save(notify = true) {
+  /** Fehlende Felder ergänzen, ältere Datenstände umwandeln. */
+  function normalize() {
+    state.ingredients ||= {};
+    state.weeks ||= {};
+    state.settings ||= { usdaKey: '' };
+    state.meta ||= { updatedAt: 0 };
+    migrateTags();
+    migrateProfile();
+    Object.values(state.weeks).forEach(migrateShopping);
+    autoArchive();
+  }
+
+  /**
+   * Speichern. Eigene Änderungen (local) bekommen einen neuen Zeitstempel und
+   * werden an den Geräte-Sync gemeldet; vom Sync geholte Daten nicht.
+   */
+  function save(notify = true, { local = true } = {}) {
+    if (notify && local) state.meta.updatedAt = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
       console.warn('Speichern fehlgeschlagen', e);
     }
     if (notify) listeners.forEach((fn) => fn());
+    if (notify && local) localListeners.forEach((fn) => fn());
   }
 
   function onChange(fn) {
     listeners.add(fn);
+  }
+  /** Nur eigene Änderungen auf diesem Gerät (für den Sync). */
+  function onLocalChange(fn) {
+    localListeners.add(fn);
+  }
+  /** Daten von einem anderen Gerät übernehmen (ohne sie erneut hochzuladen). */
+  function replaceFromSync(data) {
+    if (!data || !Array.isArray(data.recipes)) throw new Error('Ungültige Sync-Daten');
+    state = data;
+    normalize();
+    save(true, { local: false });
+  }
+  function updatedAt() {
+    return (state.meta && state.meta.updatedAt) || 0;
   }
 
   function exportJSON() {
@@ -106,17 +133,12 @@ window.PF_STORE = (function () {
       throw new Error('Keine gültige Planfood-Datei');
     }
     state = data;
-    state.ingredients ||= {};
-    state.settings ||= { usdaKey: '' };
-    migrateTags();
-    migrateProfile();
-    Object.values(state.weeks).forEach(migrateShopping);
-    autoArchive();
+    normalize();
     save();
   }
   function reset() {
     state = seed();
-    migrateProfile();
+    normalize();
     save();
   }
 
@@ -733,6 +755,9 @@ window.PF_STORE = (function () {
     load,
     save,
     onChange,
+    onLocalChange,
+    replaceFromSync,
+    updatedAt,
     exportJSON,
     importJSON,
     reset,

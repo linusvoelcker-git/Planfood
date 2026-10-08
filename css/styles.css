@@ -2142,6 +2142,16 @@ button.tag.active {
   }
   .actions {
     margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+  }
+  .actions .btn {
+    padding: 0.45rem 0.65rem;
+  }
+  .sync-chip small,
+  #profileBtn .bmi-chip {
+    display: none;
   }
   #generateListBtn {
     font-size: 0;
@@ -2264,4 +2274,104 @@ button.tag.active {
 }
 .source-link a:hover {
   border-color: var(--accent);
+}
+
+/* ============ Geräte-Sync ============ */
+.sync-chip {
+  width: auto;
+  min-width: 2.2rem;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  gap: 0.25rem;
+  display: inline-flex;
+  align-items: center;
+}
+.sync-chip small {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.sync-off {
+  color: var(--muted);
+}
+.sync-ok small {
+  color: var(--ok);
+}
+.sync-pending small {
+  color: var(--warn);
+}
+.sync-syncing span {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+.sync-error {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sync-steps {
+  margin: 0.2rem 0 0.7rem;
+  padding-left: 1.2rem;
+  line-height: 1.5;
+}
+.sync-steps li {
+  margin-bottom: 0.3rem;
+}
+.sync-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+.sync-form .field {
+  margin-bottom: 0;
+}
+.sync-choice,
+.sync-on {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.6rem;
+}
+.sync-on {
+  margin-top: 0;
+}
+.sync-on p {
+  margin: 0 0 0.5rem;
+}
+@media (max-width: 720px) {
+  .sync-form {
+    grid-template-columns: 1fr;
+  }
+}
+.pair {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+  margin: 0.7rem 0 0.4rem;
+}
+.pair p {
+  margin: 0 0 0.4rem;
+}
+.pair-qr {
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px;
+  line-height: 0;
+}
+.pair-qr svg {
+  width: 100%;
+  height: auto;
+}
+@media (max-width: 720px) {
+  .pair {
+    grid-template-columns: 1fr;
+  }
+  .pair-qr {
+    max-width: 220px;
+  }
 }

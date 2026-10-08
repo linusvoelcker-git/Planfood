@@ -45,6 +45,19 @@ Lokal: `index.html` im Browser öffnen, oder für einen kleinen Server z. B. `np
 Branch `main`, Ordner `/ (root)` → *Save*. Nach ca. 1 Minute läuft die Seite unter
 `https://<dein-github-name>.github.io/Planfood/`.
 
+## Geräte-Sync (PC ↔ Handy)
+
+Kostenlos über ein **privates GitHub-Repository** – ohne eigenen Server. Einmal am PC einrichten (⚙︎ → *Geräte-Sync* oder ☁ oben):
+
+1. Privates Repository `planfood-daten` anlegen.
+2. Fine-grained Token erstellen: nur dieses Repository, *Contents: Read and write*.
+3. Token in Planfood einfügen → *Verbinden*.
+
+Weitere Geräte: ⚙︎ → *📱 Weiteres Gerät verbinden* → QR-Code mit dem Handy scannen (oder Link öffnen) – fertig.
+Änderungen werden nach ein paar Sekunden hochgeladen und beim Öffnen/Zurückkehren abgeholt; jede Version liegt als
+Commit im Repository (Backup). Ändert man auf zwei Geräten gleichzeitig, gewinnt die neuere Änderung.
+Der Token bleibt nur auf dem jeweiligen Gerät und ist nicht Teil der Daten oder des Exports.
+
 ## Rezepte vom Handy teilen
 
 - **Android (Chrome):** Planfood im Browser öffnen → Menü ⋮ → *App installieren* bzw. *Zum Startbildschirm hinzufügen*.
@@ -83,6 +96,7 @@ css/styles.css     Design (hell/dunkel, responsiv, Karteikasten-Animation)
 js/foods.js        eingebaute Nährwerttabelle
 js/textrecipe.js   Rezept-Erkennung aus Text (Beschreibung/Bildunterschrift)
 manifest.webmanifest, sw.js, icons/   installierbare Web-App + Teilen-Menü (Android)
+js/sync.js         Geräte-Sync über privates GitHub-Repository (+ QR-Kopplung, js/vendor/qrcode.js, MIT)
 js/importer.js     Excel-/CSV-Import (nutzt SheetJS in js/vendor, Apache-2.0)
 js/nutrition.js    Nährwert-Suche (Open Food Facts, USDA) & Berechnung
 js/store.js        Daten: Rezepte, Wochen, Einkaufsliste, Archiv, Speicherung

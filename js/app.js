@@ -1499,12 +1499,190 @@
   }
 
   /* ================= Einstellungen ================= */
-  function openSettings() {
+  /* ================= Geräte-Sync ================= */
+  const Y = window.PF_SYNC;
+  function renderSyncChip() {
+    const chip = $('#syncChip');
+    const st = Y.status;
+    const time = st.at ? st.at.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+    const map = {
+      off: ['☁', 'Sync aus', 'Geräte-Sync einrichten'],
+      idle: ['☁', '…', 'Verbinde …'],
+      pending: ['☁', '•', 'Änderungen werden gleich gespeichert'],
+      syncing: ['⟳', '', 'Wird synchronisiert …'],
+      ok: ['☁', '✓', `Synchronisiert ${time}${st.message ? ' – ' + st.message : ''}`],
+      error: ['⚠', '', 'Sync-Problem: ' + st.message],
+    };
+    const [icon, text, title] = map[st.state] || map.off;
+    chip.className = 'icon-btn sync-chip sync-' + st.state;
+    chip.innerHTML = `<span>${icon}</span>${text ? `<small>${text}</small>` : ''}`;
+    chip.title = title;
+    chip.setAttribute('aria-label', title);
+  }
+
+  function renderSyncBox(box) {
+    const cfg = Y.config;
+    const st = Y.status;
+    if (cfg) {
+      box.innerHTML = `<div class="sync-on">
+          <p><strong>Verbunden</strong> mit <code>${esc(cfg.owner)}/${esc(cfg.repo)}</code> (privat).<br>
+          <span class="muted small">${st.state === 'error' ? '⚠ ' + esc(st.message) : st.at ? 'Zuletzt synchronisiert: ' + st.at.toLocaleString('de-DE') : 'Wird abgeglichen …'}</span></p>
+          <div class="row-btns">
+            <button type="button" class="btn btn-sm btn-primary" data-sync="pair">📱 Weiteres Gerät verbinden</button>
+            <button type="button" class="btn btn-sm" data-sync="now">⟳ Jetzt synchronisieren</button>
+            <button type="button" class="btn btn-sm btn-ghost danger" data-sync="off">Trennen</button>
+          </div>
+          <div id="pairBox"></div>
+          <p class="muted small">Änderungen werden nach ein paar Sekunden gespeichert und beim Öffnen bzw. Zurückkehren zur Seite abgeholt.</p>
+        </div>`;
+      return;
+    }
+    box.innerHTML = `<p class="muted small">Damit PC und Handy dieselben Daten haben: Planfood speichert sie (kostenlos) als Datei in einem <b>privaten GitHub-Repository</b>. Einmal einrichten:</p>
+      <ol class="sync-steps small">
+        <li><a href="https://github.com/new?name=planfood-daten&visibility=private&description=Planfood%20Daten" target="_blank" rel="noopener">Privates Repository „planfood-daten“ anlegen</a> (Häkchen bei „Private“).</li>
+        <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Token erstellen</a> (Fine-grained): <em>Repository access</em> → „Only select repositories“ → <code>planfood-daten</code>; <em>Permissions → Contents</em> → „Read and write“. Ablaufdatum z. B. 1 Jahr.</li>
+        <li>Token hier einfügen und verbinden – auf PC <b>und</b> Handy.</li>
+      </ol>
+      <div class="sync-form">
+        <label class="field small"><span>Token</span><input type="password" name="syncToken" autocomplete="off" placeholder="github_pat_…" /></label>
+        <label class="field small"><span>Repository</span><input name="syncRepo" value="planfood-daten" autocomplete="off" /></label>
+        <button type="button" class="btn btn-primary btn-sm" data-sync="connect">Verbinden</button>
+      </div>
+      <div id="syncChoice"></div>
+      <p class="warn small" id="syncMsg" hidden></p>
+      <p class="muted small">Der Token bleibt nur auf diesem Gerät gespeichert und wird nicht mitsynchronisiert.</p>`;
+  }
+
+  async function handleSyncAction(act, dlg) {
+    const box = $('#syncBox', dlg);
+    const msg = $('#syncMsg', dlg);
+    const showErr = (e) => {
+      if (!msg) return toast(e.message);
+      msg.hidden = false;
+      msg.textContent = e.message;
+    };
+    if (act.dataset.sync === 'pair') {
+      const link = Y.pairingLink();
+      const pair = $('#pairBox', dlg);
+      pair.innerHTML = '<p class="muted small">QR-Code wird erstellt …</p>';
+      let svg = '';
+      try {
+        const qrcode = await loadScript('js/vendor/qrcode.js', 'qrcode');
+        const qr = qrcode(0, 'L');
+        qr.addData(link);
+        qr.make();
+        svg = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+      } catch {
+        svg = '';
+      }
+      pair.innerHTML = `<div class="pair">
+          ${svg ? `<div class="pair-qr">${svg}</div>` : ''}
+          <div>
+            <p><strong>Mit dem Handy scannen</strong> (Kamera-App) – Planfood öffnet sich und verbindet sich automatisch.</p>
+            <p class="small">Oder den Link auf dem anderen Gerät öffnen:</p>
+            <button type="button" class="btn btn-sm" data-sync="copylink">📋 Link kopieren</button>
+            <p class="warn small">⚠ Code und Link enthalten deinen Zugang – wie ein Passwort behandeln und nicht weitergeben.</p>
+          </div>
+        </div>`;
+      pair.dataset.link = link;
+    }
+    if (act.dataset.sync === 'copylink') {
+      const link = $('#pairBox', dlg).dataset.link;
+      try {
+        await navigator.clipboard.writeText(link);
+        toast('Link kopiert – auf dem anderen Gerät öffnen');
+      } catch {
+        prompt('Link zum Kopieren:', link);
+      }
+    }
+    if (act.dataset.sync === 'now') {
+      await Y.sync();
+      renderSyncBox(box);
+      toast(Y.status.state === 'error' ? 'Sync-Problem: ' + Y.status.message : 'Synchronisiert');
+    }
+    if (act.dataset.sync === 'off' && confirm('Sync auf diesem Gerät trennen? Die Daten bleiben hier und im Repository erhalten.')) {
+      Y.disconnect();
+      renderSyncBox(box);
+    }
+    if (act.dataset.sync === 'connect') {
+      const form = act.closest('form');
+      const token = form.syncToken.value.trim();
+      const repo = form.syncRepo.value.trim() || 'planfood-daten';
+      if (!token) return showErr(new Error('Bitte den Token einfügen.'));
+      act.disabled = true;
+      act.textContent = 'Prüfe …';
+      try {
+        const res = await Y.connect(token, repo);
+        const ownerName = res.owner;
+        const name = res.repo;
+        if (!res.remote) {
+          await Y.activate(token, ownerName, name, 'upload', null);
+          renderSyncBox(box);
+          toast('Verbunden – Daten hochgeladen');
+          return;
+        }
+        const when = res.remote.updatedAt ? new Date(res.remote.updatedAt).toLocaleString('de-DE') : 'unbekannt';
+        $('#syncChoice', dlg).innerHTML = `<div class="sync-choice">
+            <p>Im Repository liegen schon Daten (Stand ${esc(when)}, ${res.remote.recipes} Rezepte). Welche sollen gelten?</p>
+            <div class="row-btns">
+              <button type="button" class="btn btn-primary btn-sm" data-choice="download">⬇ Daten aus der Cloud übernehmen</button>
+              <button type="button" class="btn btn-sm" data-choice="upload">⬆ Daten dieses Geräts hochladen</button>
+            </div>
+            <p class="muted small">Auf dem zweiten Gerät meist „aus der Cloud übernehmen“. Die jeweils andere Seite wird überschrieben (im Repository bleibt jede Version als Commit erhalten).</p>
+          </div>`;
+        $('#syncChoice', dlg).onclick = async (ev) => {
+          const c = ev.target.closest('[data-choice]');
+          if (!c) return;
+          await Y.activate(token, ownerName, name, c.dataset.choice, res.remote);
+          renderSyncBox(box);
+          toast(c.dataset.choice === 'download' ? 'Daten aus der Cloud übernommen' : 'Daten hochgeladen');
+        };
+      } catch (e) {
+        showErr(e);
+      } finally {
+        if (act.isConnected) {
+          act.disabled = false;
+          act.textContent = 'Verbinden';
+        }
+      }
+    }
+  }
+
+  /** Zusatz-Skript erst bei Bedarf laden (z. B. QR-Code-Erzeugung). */
+  function loadScript(src, globalName) {
+    if (window[globalName]) return Promise.resolve(window[globalName]);
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src;
+      el.onload = () => resolve(window[globalName]);
+      el.onerror = () => reject(new Error('Skript konnte nicht geladen werden'));
+      document.head.appendChild(el);
+    });
+  }
+
+  /** Geöffnet über den Kopplungs-Link/QR-Code eines anderen Geräts. */
+  async function handlePairingLink() {
+    const pairing = Y.readPairingFromUrl();
+    if (!pairing) return;
+    if (!confirm(`Dieses Gerät mit deiner Planfood-Cloud (${pairing.owner}/${pairing.repo}) verbinden?\n\nDie Daten auf diesem Gerät werden durch die Daten aus der Cloud ersetzt.`)) return;
+    try {
+      const res = await Y.connect(pairing.token, `${pairing.owner}/${pairing.repo}`);
+      await Y.activate(pairing.token, res.owner, res.repo, res.remote ? 'download' : 'upload', res.remote);
+      toast('Verbunden – deine Daten sind jetzt auf diesem Gerät');
+    } catch (e) {
+      alert('Verbinden fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  function openSettings({ focusSync = false } = {}) {
     const dlg = $('#settingsDialog');
     dlg.innerHTML = `<form method="dialog">
       <header class="dialog-head"><h2>⚙︎ Einstellungen &amp; Daten</h2>
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
       <div class="dialog-body">
+        <div class="field" id="syncSection"><span>☁ Geräte-Sync (PC ↔ Handy)</span>
+          <div id="syncBox"></div>
+        </div>
         <label class="field"><span>USDA FoodData Central API-Key <small>(optional)</small></span>
           <input name="usdaKey" value="${esc(S.state.settings.usdaKey || '')}" placeholder="leer = DEMO_KEY (stark limitiert)" />
           <small class="muted">Kostenlos unter <a href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">fdc.nal.usda.gov/api-key-signup</a>. Wird nur in deinem Browser gespeichert.</small>
@@ -1547,7 +1725,17 @@
       dlg.close();
       toast('Einstellungen gespeichert');
     });
+    renderSyncBox($('#syncBox', dlg));
+    form.addEventListener('keydown', (ev) => {
+      // Enter im Token-Feld = Verbinden (nicht das ganze Formular speichern)
+      if (ev.key === 'Enter' && /syncToken|syncRepo/.test(ev.target.name)) {
+        ev.preventDefault();
+        $('[data-sync="connect"]', dlg).click();
+      }
+    });
     dlg.onclick = (ev) => {
+      const syncBtn = ev.target.closest('[data-sync]');
+      if (syncBtn) return handleSyncAction(syncBtn, dlg);
       const act = ev.target.closest('[data-act]');
       if (!act) return;
       if (act.dataset.act === 'export') {
@@ -1604,6 +1792,7 @@
       }
     });
     openDialog(dlg);
+    if (focusSync) setTimeout(() => $('#syncSection', dlg).scrollIntoView({ block: 'start' }), 50);
   }
 
   /* ================= Drag & Drop ================= */
@@ -1690,7 +1879,8 @@
       renderArchive();
       openDialog($('#archiveDialog'));
     });
-    $('#settingsBtn').addEventListener('click', openSettings);
+    $('#settingsBtn').addEventListener('click', () => openSettings());
+    $('#syncChip').addEventListener('click', () => openSettings({ focusSync: true }));
     $('#profileBtn').addEventListener('click', openProfile);
     $('#calendar').addEventListener('click', (ev) => {
       if (ev.target.closest('[data-act="open-profile"]')) openProfile();
@@ -1992,6 +2182,9 @@
 
   S.load();
   S.onChange(renderAll);
+  Y.onStatus(renderSyncChip);
+  Y.init();
+  renderSyncChip();
   // Installierbar machen (Teilen-Menü am Handy). Der Service Worker speichert nichts zwischen.
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -2000,4 +2193,6 @@
   setupDnD();
   renderAll();
   handleShareParams();
+  handlePairingLink();
+  window.addEventListener('hashchange', handlePairingLink);
 })();
