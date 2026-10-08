@@ -25,7 +25,7 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   Bildunterschrift einfügen → Name, Portionen, Zutaten (Löffel, Tassen, Dosen … in g/Stück umgerechnet), Zubereitung,
   Kategorie und Tags (aus Hashtags) werden erkannt und als Entwurf im Editor geöffnet. Der Link wird als Quelle gespeichert.
   Läuft komplett im Browser, kostenlos und ohne Server.
-- **Excel-Import** (📥 neben der Suche): liest .xlsx/.xls/.ods/.csv mit einer Zeile pro Zutat
+- **Excel-Import** (＋ Rezept ▾ → 📥): liest .xlsx/.xls/.ods/.csv mit einer Zeile pro Zutat
   (Spalten *Gericht, Zutat, Menge, Einheit*, optional *Zubereitung, Portionen, Kategorie, Tag, Mahlzeit*, Nährwert-Spalten)
   und formt daraus einzelne Rezepte. Ein Blatt mit *Zutat + Nährwerten pro 100 g* wird als Nährwertquelle übernommen,
   *Tag/Mahlzeit* auf Wunsch als Wochenplan. Vorlage zum Herunterladen im Import-Dialog.
