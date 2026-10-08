@@ -21,6 +21,10 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   Kommt später mehr von einer schon abgehakten Zutat dazu, erscheint die zusätzliche Menge als neuer, offener Eintrag.
 - **Archiv**: Wochen, die vorbei sind, werden automatisch archiviert (schreibgeschützt, mit Kopie der Rezepte).
   Man kann eine Woche auch manuell abschließen, sie wieder öffnen oder als Vorlage für eine neue Woche nutzen.
+- **Rezept aus Link / Text** (＋ Rezept ▾ → 🔗): Link zu YouTube/Instagram/TikTok und die Beschreibung bzw.
+  Bildunterschrift einfügen → Name, Portionen, Zutaten (Löffel, Tassen, Dosen … in g/Stück umgerechnet), Zubereitung,
+  Kategorie und Tags (aus Hashtags) werden erkannt und als Entwurf im Editor geöffnet. Der Link wird als Quelle gespeichert.
+  Läuft komplett im Browser, kostenlos und ohne Server.
 - **Excel-Import** (📥 neben der Suche): liest .xlsx/.xls/.ods/.csv mit einer Zeile pro Zutat
   (Spalten *Gericht, Zutat, Menge, Einheit*, optional *Zubereitung, Portionen, Kategorie, Tag, Mahlzeit*, Nährwert-Spalten)
   und formt daraus einzelne Rezepte. Ein Blatt mit *Zutat + Nährwerten pro 100 g* wird als Nährwertquelle übernommen,
@@ -40,6 +44,15 @@ Lokal: `index.html` im Browser öffnen, oder für einen kleinen Server z. B. `np
 **Online über GitHub Pages:** Repository → *Settings* → *Pages* → *Source: Deploy from a branch* →
 Branch `main`, Ordner `/ (root)` → *Save*. Nach ca. 1 Minute läuft die Seite unter
 `https://<dein-github-name>.github.io/Planfood/`.
+
+## Rezepte vom Handy teilen
+
+- **Android (Chrome):** Planfood im Browser öffnen → Menü ⋮ → *App installieren* bzw. *Zum Startbildschirm hinzufügen*.
+  Danach erscheint Planfood im **Teilen**-Menü von YouTube, Instagram, TikTok usw. Geteilter Text landet direkt im
+  Dialog „Rezept aus Link / Text“. (Teilt eine App nur den Link, muss die Beschreibung noch hineinkopiert werden.)
+- **iPhone:** Safari unterstützt das Teilen an Web-Apps nicht. Alternative über die App **Kurzbefehle**: neuer Kurzbefehl →
+  *Im Share-Sheet anzeigen* (Eingabe: Text und URLs) → Aktion *Text* mit `https://<deine-planfood-adresse>/?text=` +
+  *Kurzbefehleingabe* (URL-codiert über *URL codieren*) → *URL öffnen*. Dann Text markieren → Teilen → Kurzbefehl.
 
 ## Woher kommen die Nährwerte?
 
@@ -68,6 +81,8 @@ Die Datenschicht steckt komplett in `js/store.js` und lässt sich dort austausch
 index.html         Grundgerüst & Dialoge
 css/styles.css     Design (hell/dunkel, responsiv, Karteikasten-Animation)
 js/foods.js        eingebaute Nährwerttabelle
+js/textrecipe.js   Rezept-Erkennung aus Text (Beschreibung/Bildunterschrift)
+manifest.webmanifest, sw.js, icons/   installierbare Web-App + Teilen-Menü (Android)
 js/importer.js     Excel-/CSV-Import (nutzt SheetJS in js/vendor, Apache-2.0)
 js/nutrition.js    Nährwert-Suche (Open Food Facts, USDA) & Berechnung
 js/store.js        Daten: Rezepte, Wochen, Einkaufsliste, Archiv, Speicherung

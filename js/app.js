@@ -399,6 +399,13 @@
     return html;
   }
 
+  function sourceLink(url) {
+    if (!/^https?:\/\//i.test(url || '')) return '';
+    const platform = window.PF_TEXTRECIPE.platformOf(url);
+    const label = { YouTube: '▶ Auf YouTube ansehen', Instagram: '📷 Auf Instagram ansehen', TikTok: '🎵 Auf TikTok ansehen' }[platform] || '🔗 Quelle öffnen';
+    return `<p class="source-link"><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a></p>`;
+  }
+
   function confirmDelete(ids) {
     const names = ids.map((id) => (S.state.recipes.find((r) => r.id === id) || {}).name).filter(Boolean);
     if (!names.length) return false;
@@ -599,6 +606,7 @@
             <h3>Zutaten${entry && scale !== 1 ? ` <small>(für ${fmtNum(entry.servings, 1)} Portionen)</small>` : ''}</h3>
             <ul class="detail-ings">${ingRows}</ul>
             ${recipe.instructions ? `<h3>Zubereitung</h3><p class="instructions">${esc(recipe.instructions)}</p>` : ''}
+            ${sourceLink(recipe.sourceUrl)}
           </section>
           <section>
             <h3>Nährwerte pro Portion</h3>
@@ -723,7 +731,7 @@
   /* ================= Rezept-Editor ================= */
   const editor = { recipe: null, isNew: true };
 
-  function openEditor(recipe = null, forceNew = false) {
+  function openEditor(recipe = null, forceNew = false, notice = '') {
     const dlg = $('#editorDialog');
     const form = $('#editorForm');
     editor.isNew = !recipe || forceNew;
@@ -745,6 +753,10 @@
     form.category.innerHTML = S.CATEGORIES.map((c) => `<option ${c === editor.recipe.category ? 'selected' : ''}>${c}</option>`).join('');
     form.servings.value = editor.recipe.servings;
     form.instructions.value = editor.recipe.instructions || '';
+    form.sourceUrl.value = editor.recipe.sourceUrl || '';
+    const noticeEl = $('#editorNotice');
+    noticeEl.hidden = !notice;
+    noticeEl.innerHTML = notice;
     $('#ingredientNames').innerHTML = S.knownIngredientNames().map((n) => `<option value="${esc(n)}">`).join('');
     renderSwatches();
     renderTagPicker();
@@ -906,6 +918,7 @@
     r.category = form.category.value;
     r.servings = Math.max(1, parseInt(form.servings.value, 10) || 1);
     r.instructions = form.instructions.value.trim();
+    r.sourceUrl = form.sourceUrl.value.trim();
     r.ingredients = r.ingredients
       .map((i) => ({ name: i.name.trim(), amount: parseFloat(String(i.amount).replace(',', '.')), unit: i.unit }))
       .filter((i) => i.name && i.amount > 0);
@@ -1285,6 +1298,87 @@
     window.PF_IMPORT.loadLib().catch(() => {}); // schon mal vorladen
   }
 
+  /* ================= Rezept aus Link / Text ================= */
+  function openLinkImport(prefill = {}) {
+    const dlg = $('#linkDialog');
+    dlg.innerHTML = `<form method="dialog" class="link-import">
+      <header class="dialog-head"><div><h2>🔗 Rezept aus Link / Text</h2>
+        <span class="muted">YouTube, Instagram, TikTok oder jede andere Rezeptbeschreibung</span></div>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body">
+        <label class="field"><span>Link <small>(optional – wird als Quelle gespeichert)</small></span>
+          <input name="url" type="url" inputmode="url" placeholder="https://www.instagram.com/reel/…" value="${esc(prefill.url || '')}" /></label>
+        <label class="field"><span>Beschreibung / Bildunterschrift</span>
+          <textarea name="text" rows="10" placeholder="Hier den Text mit den Zutaten einfügen, z. B.&#10;&#10;Zutaten:&#10;200 g Haferflocken&#10;2 Bananen&#10;1 EL Honig&#10;&#10;Zubereitung: …">${esc(prefill.text || '')}</textarea></label>
+        <details class="howto">
+          <summary>So kopierst du den Text</summary>
+          <ul>
+            <li><b>YouTube:</b> unter dem Video auf die Beschreibung tippen („…mehr“), Text markieren → Kopieren.</li>
+            <li><b>Instagram:</b> am Computer die Bildunterschrift markieren und kopieren. In der App: Beitrag → ⋯ → „Link kopieren“ ist nur der Link – den Text am besten im Browser öffnen und dort kopieren.</li>
+            <li><b>TikTok:</b> Beschreibung antippen, lange drücken → Kopieren (oder im Browser markieren).</li>
+            <li><b>Handy:</b> Auf Android kannst du Planfood installieren und dann direkt aus der App über „Teilen“ hierher schicken (siehe README).</li>
+          </ul>
+        </details>
+        <p class="warn small" id="linkMsg" hidden></p>
+      </div>
+      <footer class="dialog-foot">
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button class="btn btn-primary">Rezept erkennen →</button>
+      </footer>
+    </form>`;
+    const form = $('form', dlg);
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const text = form.text.value.trim();
+      const url = form.url.value.trim() || ((text.match(/https?:\/\/\S+/) || [])[0] || '');
+      if (!text) {
+        const msg = $('#linkMsg', dlg);
+        msg.hidden = false;
+        msg.textContent = 'Bitte den Text mit den Zutaten einfügen – über den Link allein kann Planfood die Seite nicht lesen (das ginge nur mit einem eigenen Server).';
+        return;
+      }
+      const draft = window.PF_TEXTRECIPE.parse(text, { url, title: prefill.title });
+      const tagIds = draft.tags.map((n) => S.state.tags.find((t) => N.norm(t.name) === N.norm(n))).filter(Boolean).map((t) => t.id);
+      const recipe = {
+        id: S.uid(),
+        name: draft.name,
+        category: draft.category,
+        color: S.COLORS[Math.floor(Math.random() * S.COLORS.length)],
+        servings: draft.servings,
+        ingredients: draft.ingredients.length ? draft.ingredients : [{ name: '', amount: '', unit: 'g' }],
+        instructions: draft.instructions,
+        tags: tagIds,
+        sourceUrl: draft.sourceUrl,
+      };
+      const parts = [
+        `<strong>${draft.ingredients.length ? `✨ ${draft.ingredients.length} Zutaten erkannt` : '⚠ Keine Zutaten mit Mengen erkannt'}</strong>${
+          draft.platform ? ` aus ${esc(draft.platform)}` : ''
+        } – bitte kurz prüfen und speichern.`,
+      ];
+      if (draft.skipped.length)
+        parts.push(`Nicht übernommen (ohne Menge): <em>${draft.skipped.map(esc).join(' · ')}</em>`);
+      if (draft.ingredients.some((i) => i.unit === 'g'))
+        parts.push('<span class="muted">Löffel/Tassen/Dosen wurden in Gramm umgerechnet (Näherungswerte).</span>');
+      dlg.close();
+      openEditor(recipe, true, parts.join('<br>'));
+    });
+    openDialog(dlg);
+    setTimeout(() => (prefill.text ? form.querySelector('.btn-primary') : form.text).focus(), 50);
+  }
+
+  /** Geteilte Inhalte (Teilen-Menü am Handy / Kurzbefehl) aus der Adresszeile übernehmen. */
+  function handleShareParams() {
+    const params = new URLSearchParams(location.search);
+    const text = params.get('text') || '';
+    const url = params.get('url') || '';
+    const title = params.get('title') || '';
+    if (!text && !url && !title) return;
+    history.replaceState(null, '', location.pathname); // Adresse aufräumen
+    // Manche Apps schicken nur den Link im Textfeld
+    const onlyLink = /^\s*https?:\/\/\S+\s*$/.test(text);
+    openLinkImport({ url: url || (onlyLink ? text.trim() : ''), text: onlyLink ? '' : text, title });
+  }
+
   /* ================= Profil ================= */
   function openProfile() {
     const dlg = $('#profileDialog');
@@ -1601,8 +1695,34 @@
     $('#calendar').addEventListener('click', (ev) => {
       if (ev.target.closest('[data-act="open-profile"]')) openProfile();
     });
-    $('#newRecipeBtn').addEventListener('click', () => openEditor());
-    $('#importBtn').addEventListener('click', openImport);
+    // „＋ Rezept“-Menü: leer, aus Link/Text, aus Excel
+    const menu = $('#newRecipeMenu');
+    const toggleMenu = (open) => {
+      menu.hidden = !open;
+      $('#newRecipeBtn').setAttribute('aria-expanded', open);
+    };
+    $('#newRecipeBtn').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      toggleMenu(menu.hidden);
+      if (!menu.hidden) menu.querySelector('button').focus();
+    });
+    menu.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-new]');
+      if (!b) return;
+      toggleMenu(false);
+      if (b.dataset.new === 'blank') openEditor();
+      if (b.dataset.new === 'link') openLinkImport();
+      if (b.dataset.new === 'excel') openImport();
+    });
+    document.addEventListener('click', (ev) => {
+      if (!menu.hidden && !ev.target.closest('.menu-wrap')) toggleMenu(false);
+    });
+    menu.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        toggleMenu(false);
+        $('#newRecipeBtn').focus();
+      }
+    });
     $$('.view-toggle button').forEach((b) =>
       b.addEventListener('click', () => {
         ui.cardView = b.dataset.view;
@@ -1872,7 +1992,12 @@
 
   S.load();
   S.onChange(renderAll);
+  // Installierbar machen (Teilen-Menü am Handy). Der Service Worker speichert nichts zwischen.
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
   setupEvents();
   setupDnD();
   renderAll();
+  handleShareParams();
 })();

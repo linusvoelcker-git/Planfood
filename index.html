@@ -9,7 +9,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css?v=2026100801" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#2a7d6b" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/styles.css?v=2026100802" />
 </head>
 <body>
   <header class="topbar">
@@ -64,8 +67,14 @@
             <button class="active" data-view="cards" title="Karteikasten" aria-pressed="true">📇</button>
             <button data-view="list" title="Einfache Liste" aria-pressed="false">☰</button>
           </div>
-          <button class="icon-btn" id="importBtn" title="Rezepte aus Excel importieren" aria-label="Rezepte aus Excel importieren">📥</button>
-          <button class="btn btn-primary btn-sm" id="newRecipeBtn" title="Neues Rezept anlegen">＋ Rezept</button>
+          <div class="menu-wrap">
+            <button class="btn btn-primary btn-sm" id="newRecipeBtn" aria-haspopup="menu" aria-expanded="false">＋ Rezept ▾</button>
+            <div class="menu" id="newRecipeMenu" role="menu" hidden>
+              <button role="menuitem" data-new="blank">✏️ Neues Rezept</button>
+              <button role="menuitem" data-new="link">🔗 Aus Link / Text <small>YouTube, Instagram, TikTok</small></button>
+              <button role="menuitem" data-new="excel">📥 Aus Excel-Datei</button>
+            </div>
+          </div>
         </div>
         <div class="tag-filter" id="tagFilter" aria-label="Nach Tags filtern"></div>
         <div class="cardbox" id="cardbox">
@@ -91,6 +100,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button>
       </header>
       <div class="dialog-body">
+        <div class="editor-notice" id="editorNotice" hidden></div>
         <div class="grid-2">
           <label class="field">
             <span>Name</span>
@@ -129,6 +139,11 @@
           <textarea name="instructions" rows="4" placeholder="Kurze Anleitung …"></textarea>
         </label>
 
+        <label class="field">
+          <span>Quelle <small>(Link zum Video oder Rezept, optional)</small></span>
+          <input name="sourceUrl" type="url" inputmode="url" placeholder="https://…" />
+        </label>
+
         <div class="nutri-preview" id="editorNutri"></div>
       </div>
       <footer class="dialog-foot">
@@ -147,6 +162,9 @@
   <!-- Excel-Import -->
   <dialog id="importDialog" class="dialog dialog-wide"></dialog>
 
+  <!-- Rezept aus Link / Text -->
+  <dialog id="linkDialog" class="dialog dialog-wide"></dialog>
+
   <!-- Profil -->
   <dialog id="profileDialog" class="dialog dialog-wide"></dialog>
 
@@ -158,10 +176,11 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/foods.js?v=2026100801"></script>
-  <script src="js/nutrition.js?v=2026100801"></script>
-  <script src="js/store.js?v=2026100801"></script>
-  <script src="js/importer.js?v=2026100801"></script>
-  <script src="js/app.js?v=2026100801"></script>
+  <script src="js/foods.js?v=2026100802"></script>
+  <script src="js/nutrition.js?v=2026100802"></script>
+  <script src="js/store.js?v=2026100802"></script>
+  <script src="js/textrecipe.js?v=2026100802"></script>
+  <script src="js/importer.js?v=2026100802"></script>
+  <script src="js/app.js?v=2026100802"></script>
 </body>
 </html>

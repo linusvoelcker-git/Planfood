@@ -2173,3 +2173,95 @@ button.tag.active {
     justify-self: start;
   }
 }
+
+/* ============ „＋ Rezept“-Menü ============ */
+.menu-wrap {
+  position: relative;
+  flex: none;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 700;
+  min-width: 15rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  animation: dialog-in 0.15s ease-out;
+}
+.menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+}
+.menu button small {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+  margin-left: 1.55rem;
+}
+.menu button:hover,
+.menu button:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+/* ============ Rezept aus Link / Text ============ */
+.link-import textarea {
+  font-family: inherit;
+  line-height: 1.45;
+  resize: vertical;
+}
+.howto {
+  font-size: 0.86rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+}
+.howto summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.howto ul {
+  margin: 0.5rem 0 0.2rem;
+  padding-left: 1.1rem;
+}
+.howto li {
+  margin-bottom: 0.3rem;
+}
+.editor-notice {
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.source-link {
+  margin: 0.8rem 0 0;
+}
+.source-link a {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.88rem;
+}
+.source-link a:hover {
+  border-color: var(--accent);
+}
