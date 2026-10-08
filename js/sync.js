@@ -227,6 +227,7 @@ window.PF_SYNC = (function () {
   async function activate(token, owner, repo, mode, remote) {
     cfg = { token, owner, repo, sha: remote ? remote.sha : null, etag: null, syncedAt: 0 };
     saveCfg();
+    S.createBackup('Vor dem Einrichten des Geräte-Syncs');
     if (mode === 'download' && remote) {
       S.replaceFromSync(remote.data);
       cfg.syncedAt = S.updatedAt();

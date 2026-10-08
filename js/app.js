@@ -1691,6 +1691,10 @@
           <p class="muted small">Farbe antippen zum Ändern, Name direkt bearbeiten. Löschen entfernt den Tag auch aus allen Rezepten.</p>
           <div class="tag-manager" id="tagManager"></div>
         </div>
+        <div class="field"><span>🛟 Sicherungen auf diesem Gerät</span>
+          <p class="muted small">Bevor Daten ersetzt werden (Sync, Import, Zurücksetzen), legt Planfood automatisch eine Sicherung an. Die letzten 5 bleiben erhalten.</p>
+          <div id="backupList"></div>
+        </div>
         <div class="field"><span>Daten</span>
           <p class="muted small">Alle Daten liegen lokal in diesem Browser. Für Backup oder Umzug auf ein anderes Gerät exportieren/importieren.</p>
           <div class="row-btns">
@@ -1726,6 +1730,33 @@
       toast('Einstellungen gespeichert');
     });
     renderSyncBox($('#syncBox', dlg));
+    const renderBackups = () => {
+      const list = S.listBackups();
+      $('#backupList', dlg).innerHTML =
+        (list.length
+          ? `<ul class="backup-list">${list
+              .map(
+                (b) => `<li><span><strong>${new Date(b.at).toLocaleString('de-DE')}</strong> · ${esc(b.reason)} · ${b.recipes} Rezepte</span>
+                  <button type="button" class="btn btn-sm" data-restore="${b.at}">Wiederherstellen</button></li>`
+              )
+              .join('')}</ul>`
+          : '<p class="muted small">Noch keine Sicherungen.</p>') +
+        '<button type="button" class="btn btn-sm" data-backup="now">🛟 Jetzt sichern</button>';
+    };
+    renderBackups();
+    $('#backupList', dlg).addEventListener('click', (ev) => {
+      if (ev.target.closest('[data-backup]')) {
+        S.createBackup('Manuell');
+        renderBackups();
+        toast('Sicherung angelegt');
+      }
+      const r = ev.target.closest('[data-restore]');
+      if (r && confirm('Diese Sicherung wiederherstellen? Der aktuelle Stand wird vorher ebenfalls gesichert.')) {
+        S.restoreBackup(Number(r.dataset.restore));
+        renderBackups();
+        toast('Sicherung wiederhergestellt');
+      }
+    });
     form.addEventListener('keydown', (ev) => {
       // Enter im Token-Feld = Verbinden (nicht das ganze Formular speichern)
       if (ev.key === 'Enter' && /syncToken|syncRepo/.test(ev.target.name)) {

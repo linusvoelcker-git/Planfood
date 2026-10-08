@@ -2375,3 +2375,17 @@ button.tag.active {
     max-width: 220px;
   }
 }
+.backup-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+.backup-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.85rem;
+}

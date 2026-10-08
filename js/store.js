@@ -113,9 +113,50 @@ window.PF_STORE = (function () {
   function onLocalChange(fn) {
     localListeners.add(fn);
   }
+  /* ---------- Sicherungen auf diesem Gerät ---------- */
+  // Bevor Daten von außen ersetzt werden (Sync, Import, Zurücksetzen), wird der bisherige
+  // Stand lokal gesichert – die letzten MAX_BACKUPS bleiben erhalten.
+  const BACKUP_KEY = 'planfood:backups';
+  const MAX_BACKUPS = 5;
+  function listBackups() {
+    try {
+      return JSON.parse(localStorage.getItem(BACKUP_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+  function createBackup(reason) {
+    if (!state) return;
+    const list = listBackups();
+    list.unshift({
+      at: Date.now(),
+      reason,
+      recipes: state.recipes.length,
+      data: JSON.stringify(state),
+    });
+    // bei vollem Speicher die ältesten verwerfen
+    while (list.length) {
+      try {
+        localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, MAX_BACKUPS)));
+        return;
+      } catch {
+        list.pop();
+      }
+    }
+  }
+  function restoreBackup(at) {
+    const b = listBackups().find((x) => x.at === at);
+    if (!b) throw new Error('Sicherung nicht gefunden');
+    createBackup('Vor dem Wiederherstellen');
+    state = JSON.parse(b.data);
+    normalize();
+    save(); // gilt als eigene, neue Änderung → wird auch auf andere Geräte übertragen
+  }
+
   /** Daten von einem anderen Gerät übernehmen (ohne sie erneut hochzuladen). */
   function replaceFromSync(data) {
     if (!data || !Array.isArray(data.recipes)) throw new Error('Ungültige Sync-Daten');
+    createBackup('Vor Übernahme von einem anderen Gerät');
     state = data;
     normalize();
     save(true, { local: false });
@@ -132,11 +173,13 @@ window.PF_STORE = (function () {
     if (!data || !Array.isArray(data.recipes) || typeof data.weeks !== 'object') {
       throw new Error('Keine gültige Planfood-Datei');
     }
+    createBackup('Vor dem Import');
     state = data;
     normalize();
     save();
   }
   function reset() {
+    createBackup('Vor dem Zurücksetzen');
     state = seed();
     normalize();
     save();
@@ -757,6 +800,9 @@ window.PF_STORE = (function () {
     onChange,
     onLocalChange,
     replaceFromSync,
+    listBackups,
+    createBackup,
+    restoreBackup,
     updatedAt,
     exportJSON,
     importJSON,

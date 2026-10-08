@@ -58,6 +58,10 @@ Weitere Geräte: ⚙︎ → *📱 Weiteres Gerät verbinden* → QR-Code mit dem
 Commit im Repository (Backup). Ändert man auf zwei Geräten gleichzeitig, gewinnt die neuere Änderung.
 Der Token bleibt nur auf dem jeweiligen Gerät und ist nicht Teil der Daten oder des Exports.
 
+**Sicherungen:** Bevor Daten ersetzt werden (Sync-Übernahme, Einrichten, Import, Zurücksetzen), legt Planfood
+automatisch eine Sicherung im Browser an (die letzten 5). Wiederherstellen unter ⚙︎ → *Sicherungen auf diesem Gerät*.
+Der Programmstand vor Einführung des Syncs liegt im Branch `backup/vor-sync`.
+
 ## Rezepte vom Handy teilen
 
 - **Android (Chrome):** Planfood im Browser öffnen → Menü ⋮ → *App installieren* bzw. *Zum Startbildschirm hinzufügen*.
