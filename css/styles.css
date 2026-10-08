@@ -2127,6 +2127,21 @@ button.tag.active {
   #shoppingPanel {
     max-height: none;
   }
+  /* Untereinander statt nebeneinander: Bereiche dürfen so hoch werden wie ihr Inhalt
+     (sonst schrumpft die Einkaufsliste auf dem Handy auf eine Zeile zusammen) */
+  .layout,
+  .side,
+  .planner,
+  .side-panel {
+    min-height: auto;
+  }
+  .side-panel {
+    flex: none;
+  }
+  .cardbox {
+    height: 560px;
+    flex: none;
+  }
 }
 @media (max-width: 720px) {
   .topbar {
