@@ -60,6 +60,9 @@ window.PF_IMPORT = (function () {
       .replace(/\s+/g, ' ')
       .trim();
   }
+  /** Englische Zutatennamen übersetzen (eingebautes Wörterbuch) */
+  const toGerman = (n) => (n && window.PF_TRANSLATE && window.PF_TRANSLATE.toGerman(n)) || n;
+
   function num(v) {
     if (typeof v === 'number') return v;
     const n = parseFloat(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
@@ -71,11 +74,11 @@ window.PF_IMPORT = (function () {
     const u = String(raw ?? '').trim().toLowerCase().replace(/\.$/, '');
     if (!u || u === 'g' || u === 'gramm' || u === 'gr') return { unit: 'g', factor: 1 };
     if (u === 'kg') return { unit: 'g', factor: 1000 };
-    if (u === 'ml') return { unit: 'g', factor: 1, warn: 'ml wurde 1:1 als g übernommen' };
-    if (u === 'l' || u === 'liter') return { unit: 'g', factor: 1000, warn: 'Liter wurde als 1000 g übernommen' };
+    if (u === 'ml' || u === 'milliliter') return { unit: 'ml', factor: 1 };
+    if (u === 'l' || u === 'liter') return { unit: 'l', factor: 1 };
     if (/^(stück|stueck|stk|st|x|pck|packung|zehe|zehen|scheibe|scheiben)$/.test(u)) return { unit: 'Stück', factor: 1 };
-    if (u === 'el') return { unit: 'g', factor: 15, warn: 'EL wurde als 15 g übernommen' };
-    if (u === 'tl') return { unit: 'g', factor: 5, warn: 'TL wurde als 5 g übernommen' };
+    if (u === 'el' || u === 'esslöffel') return { unit: 'EL', factor: 1 };
+    if (u === 'tl' || u === 'teelöffel') return { unit: 'TL', factor: 1 };
     return null;
   }
 
@@ -116,7 +119,7 @@ window.PF_IMPORT = (function () {
       if (cols.name == null && cols.amount == null) {
         if (cols.kcal == null && cols.protein == null) continue;
         for (const row of rows.slice(head.row + 1)) {
-          const name = cleanName(get(row, 'ing'));
+          const name = toGerman(cleanName(get(row, 'ing')));
           if (!name) continue;
           const nutrients = {};
           for (const k of NUTRI_KEYS) {
@@ -152,7 +155,7 @@ window.PF_IMPORT = (function () {
 
       for (const row of rows.slice(head.row + 1)) {
         const rawName = cleanName(get(row, 'name'));
-        const ingName = cleanName(get(row, 'ing'));
+        const ingName = toGerman(cleanName(get(row, 'ing')));
         if (!ingName) {
           finishBlock(); // Summen- oder Leerzeile beendet ein Gericht
           continue;
@@ -189,11 +192,12 @@ window.PF_IMPORT = (function () {
         block.ingredients.push({ name: ingName, amount: qty, unit: conv.unit });
 
         // Nährwerte der Zeile (absolut) → pro 100 g zurückrechnen, falls kein Nährwert-Blatt
-        if (conv.unit === 'g' && !derived.has(N.norm(ingName))) {
+        const grams = N.gramsOf(qty, conv.unit);
+        if (grams && !derived.has(N.norm(ingName))) {
           const nutrients = {};
           for (const k of NUTRI_KEYS) {
             const v = num(get(row, k));
-            if (v != null) nutrients[k] = N.round((v / qty) * 100);
+            if (v != null) nutrients[k] = N.round((v / grams) * 100);
           }
           if (nutrients.kcal != null) derived.set(N.norm(ingName), { name: ingName, nutrients });
         }

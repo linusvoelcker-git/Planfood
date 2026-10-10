@@ -195,8 +195,13 @@ window.PF_NUTRITION = (function () {
   }
 
   /** Gramm einer Zutat (Stück -> Gramm über gramsPerPiece). null = unbekannt. */
+  // Einheiten im Rezept. Für die Nährwerte wird in Gramm umgerechnet:
+  // ml ≈ g (Dichte von Wasser), TL/EL = durchschnittliche Löffelmengen.
+  const UNITS = ['g', 'ml', 'l', 'EL', 'TL', 'Stück'];
+  const UNIT_GRAMS = { g: 1, ml: 1, l: 1000, EL: 15, TL: 5 };
+
   function gramsOf(amount, unit, info) {
-    if (unit === 'g') return amount;
+    if (UNIT_GRAMS[unit]) return amount * UNIT_GRAMS[unit];
     if (info && info.gramsPerPiece) return amount * info.gramsPerPiece;
     return null;
   }
@@ -234,6 +239,8 @@ window.PF_NUTRITION = (function () {
     fetchOffProduct,
     searchUSDA,
     gramsOf,
+    UNITS,
+    UNIT_GRAMS,
     emptyTotals,
     addTo,
     mergeTotals,

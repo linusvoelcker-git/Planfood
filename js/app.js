@@ -63,10 +63,12 @@
   function fmtAmount(amount, unit) {
     if (!unit) return '';
     if (unit === 'g') return amount >= 1000 ? `${fmtNum(amount / 1000, 2)} kg` : `${fmtNum(amount)} g`;
+    if (unit === 'ml') return amount >= 1000 ? `${fmtNum(amount / 1000, 2)} l` : `${fmtNum(amount)} ml`;
+    if (unit === 'l') return `${fmtNum(amount, 2)} l`;
     const whole = Math.floor(amount);
     const half = Math.abs(amount - whole - 0.5) < 0.01;
     const text = half ? `${whole || ''}½` : fmtNum(amount, 2);
-    return `${text} Stück`;
+    return `${text} ${unit}`;
   }
 
   const GOAL_SHORT = { kcal: 'kcal', protein: 'E', carbs: 'KH', fat: 'F', fiber: 'Bal', sugar: 'Zucker' };
@@ -905,8 +907,7 @@
           <input class="ing-name" list="ingredientNames" placeholder="Zutat" value="${esc(ing.name)}" data-f="name" aria-label="Zutat" />
           <input class="ing-amount" type="number" min="0" step="any" placeholder="Menge" value="${esc(ing.amount)}" data-f="amount" aria-label="Menge" />
           <select data-f="unit" aria-label="Einheit">
-            <option value="g" ${ing.unit === 'g' ? 'selected' : ''}>g</option>
-            <option value="Stück" ${ing.unit === 'Stück' ? 'selected' : ''}>Stück</option>
+            ${N.UNITS.map((u) => `<option value="${u}" ${ing.unit === u ? 'selected' : ''}>${u}</option>`).join('')}
           </select>
           <button type="button" class="ing-status ${st.cls}" data-act="ing-lookup" title="${esc(st.title || '')}" ${st.label ? '' : 'disabled'}>${st.label}</button>
           <button type="button" class="icon-btn small" data-act="ing-remove" aria-label="Zutat entfernen">✕</button>
@@ -956,6 +957,23 @@
     }
     renderEditorNutri();
   });
+  // Englische Zutatennamen beim Verlassen des Feldes ins Deutsche übersetzen
+  const keptEnglish = new Set(); // wer nach der Übersetzung wieder Englisch eintippt, behält es
+  $('#editorForm').addEventListener('change', (ev) => {
+    if (!ev.target.matches('.ing-name')) return;
+    const row = ev.target.closest('.ing-row');
+    const original = ev.target.value.trim();
+    if (!original || keptEnglish.has(original.toLowerCase())) return;
+    const de = window.PF_TRANSLATE.toGerman(original);
+    if (!de) return;
+    keptEnglish.add(original.toLowerCase());
+    ev.target.value = de;
+    editor.recipe.ingredients[Number(row.dataset.i)].name = de;
+    updateIngStatus(row, Number(row.dataset.i));
+    renderEditorNutri();
+    toast(`„${original}“ → „${de}“ übersetzt`);
+  });
+
   $('#editorForm').addEventListener('change', (ev) => {
     const row = ev.target.closest('.ing-row');
     if (row && ev.target.dataset.f === 'unit') updateIngStatus(row, Number(row.dataset.i));
@@ -1421,7 +1439,7 @@
           </table>
           <p class="muted small">Optional erkannt: <b>Tag</b> &amp; <b>Mahlzeit</b> (→ Wochenplan), <b>Portionen</b>, <b>Kategorie</b>,
             Nährwert-Spalten (kcal, Protein, Fett, KH) sowie ein eigenes Blatt mit <b>Zutat + Nährwerten pro 100 g</b>.
-            Einheiten: g, kg, Stück; ml/l werden 1:1 als g, EL/TL als 15/5 g übernommen.</p>
+            Einheiten: g, kg, ml, l, EL, TL, Stück. Englische Zutatennamen werden automatisch übersetzt.</p>
           <button class="btn btn-sm" data-act="template">⬇ Vorlage herunterladen</button>
         </div>`;
     };
@@ -1599,8 +1617,10 @@
       ];
       if (draft.skipped.length)
         parts.push(`Nicht übernommen (ohne Menge): <em>${draft.skipped.map(esc).join(' · ')}</em>`);
-      if (draft.ingredients.some((i) => i.unit === 'g'))
-        parts.push('<span class="muted">Löffel/Tassen/Dosen wurden in Gramm umgerechnet (Näherungswerte).</span>');
+      if (draft.translated && draft.translated.length)
+        parts.push(`<span class="muted">Übersetzt: ${draft.translated.map((t) => esc(`${t.from} → ${t.to}`)).join(' · ')}</span>`);
+      if (draft.approx)
+        parts.push('<span class="muted">Tassen, Dosen, Handvoll u. Ä. wurden in Gramm umgerechnet (Näherungswerte).</span>');
       dlg.close();
       openEditor(recipe, true, parts.join('<br>'));
     });

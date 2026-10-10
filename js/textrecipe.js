@@ -9,12 +9,12 @@ window.PF_TEXTRECIPE = (function () {
     [/^(kg|kilo(gramm)?)$/, 'g', 1000],
     [/^(g|gr|gramm)$/, 'g', 1],
     [/^mg$/, 'g', 0.001],
-    [/^(l|liter)$/, 'g', 1000],
-    [/^(ml|milliliter)$/, 'g', 1],
-    [/^cl$/, 'g', 10],
-    [/^dl$/, 'g', 100],
-    [/^(el|essl[öo]ffel|tbsp|tablespoons?)$/, 'g', 15],
-    [/^(tl|teel[öo]ffel|tsp|teaspoons?)$/, 'g', 5],
+    [/^(l|liter)$/, 'ml', 1000],
+    [/^(ml|milliliter)$/, 'ml', 1],
+    [/^cl$/, 'ml', 10],
+    [/^dl$/, 'ml', 100],
+    [/^(el|essl[öo]ffel|tbsp|tbs|tablespoons?)$/, 'EL', 1],
+    [/^(tl|teel[öo]ffel|tsp|teaspoons?)$/, 'TL', 1],
     [/^(tassen?|cups?|becher)$/, 'g', 240],
     [/^(prisen?|msp|messerspitzen?)$/, 'g', 1],
     [/^(handvoll|hand voll)$/, 'g', 30],
@@ -169,8 +169,12 @@ window.PF_TEXTRECIPE = (function () {
 
     const target = unit ? unit.unit : 'Stück';
     let amount = qty * (unit ? unit.factor : 1);
-    amount = target === 'Stück' ? Math.max(0.5, Math.round(amount * 2) / 2) : Math.round(amount * 10) / 10;
-    return { name, amount, unit: target };
+    amount = ['Stück', 'EL', 'TL'].includes(target) ? Math.max(0.5, Math.round(amount * 2) / 2) : Math.round(amount * 10) / 10;
+    // Englische Zutaten (z. B. aus TikTok-Rezepten) ins Deutsche übersetzen
+    const de = window.PF_TRANSLATE ? window.PF_TRANSLATE.toGerman(name) : null;
+    // „ungefähr“: Tassen, Dosen, Handvoll, Unzen … wurden in Gramm geschätzt
+    const approx = !!(unit && unit.unit === 'g' && unit.factor !== 1 && unit.factor !== 1000 && unit.factor !== 0.001);
+    return { name: de || name, amount, unit: target, ...(de ? { from: name } : {}), ...(approx ? { approx } : {}) };
   }
 
   function guessCategory(text) {
@@ -253,10 +257,15 @@ window.PF_TEXTRECIPE = (function () {
 
     // gleiche Zutat + Einheit zusammenfassen
     const merged = [];
+    const translated = [];
+    let approx = false;
     for (const ing of ingredients) {
-      const same = merged.find((m) => m.name.toLowerCase() === ing.name.toLowerCase() && m.unit === ing.unit);
-      if (same) same.amount = Math.round((same.amount + ing.amount) * 10) / 10;
-      else merged.push({ ...ing });
+      if (ing.from && !translated.some((t) => t.from === ing.from)) translated.push({ from: ing.from, to: ing.name });
+      if (ing.approx) approx = true;
+      const clean = { name: ing.name, amount: ing.amount, unit: ing.unit };
+      const same = merged.find((m) => m.name.toLowerCase() === clean.name.toLowerCase() && m.unit === clean.unit);
+      if (same) same.amount = Math.round((same.amount + clean.amount) * 10) / 10;
+      else merged.push(clean);
     }
 
     return {
@@ -267,6 +276,8 @@ window.PF_TEXTRECIPE = (function () {
       instructions: steps.join('\n'),
       tags,
       skipped,
+      translated,
+      approx,
       sourceUrl: url,
       platform: platformOf(url),
     };

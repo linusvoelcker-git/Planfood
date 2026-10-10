@@ -16,7 +16,10 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
 - **Tags & Filter**: farbige Tags wie *High Protein, Schnell, Vegan, Low Carb, Meal Prep, Günstig*.
   Im Rezept-Editor per Klick zuweisen oder neue anlegen; über der Kartei als Filter (mehrere = alle müssen passen).
   Farben/Namen unter ⚙︎ → *Tags verwalten*. Beim Excel-Import wird eine Spalte *Tags* (kommagetrennt) übernommen.
-- **Rezept-Editor**: Mengen immer in **g** oder **Stück**. Nährwerte werden beim Tippen erkannt (✓ erkannt / ＋ Nährwerte).
+- **Rezept-Editor**: Mengen in **g, ml, l, EL, TL** oder **Stück** (für Nährwerte: ml ≈ g, EL = 15 g, TL = 5 g;
+  in der Einkaufsliste werden ml und l zusammengezählt). Nährwerte werden beim Tippen erkannt (✓ erkannt / ＋ Nährwerte).
+  **Englische Zutaten** („eggs“, „rolled oats“, „olive oil“ …) werden automatisch übersetzt – über ein eingebautes
+  Wörterbuch (`js/translate.js`), auch beim Import aus Link/Text und Excel.
 - **Einkaufsliste läuft automatisch mit**: jedes Rezept im Kalender landet sofort mit seinen Zutaten in der Liste; gleiche Zutat + Einheit wird addiert,
   skaliert nach Portionen. Einträge zum Abhaken, eigene Einträge möglich, Kopieren als Text.
 - **Live-Sync mit dem Kalender**: Rezepte bekommen einen **grünen** Rahmen, wenn alle Zutaten abgehakt sind,

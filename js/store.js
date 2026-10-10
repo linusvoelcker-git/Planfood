@@ -442,7 +442,9 @@ window.PF_STORE = (function () {
   }
 
   /* ---------- Einkaufsliste ---------- */
-  const itemKey = (name, unit) => N.norm(name) + '|' + unit;
+  // Liter werden für die Einkaufsliste in ml gerechnet, damit sich ml und l addieren
+  const normUnit = (amount, unit) => (unit === 'l' ? [amount * 1000, 'ml'] : [amount, unit]);
+  const itemKey = (name, unit) => N.norm(name) + '|' + (unit === 'l' ? 'ml' : unit);
 
   /** Benötigte Mengen aller geplanten Rezepte einer Woche. */
   function computeNeeds(week) {
@@ -453,9 +455,10 @@ window.PF_STORE = (function () {
       const scale = (e.servings || recipe.servings || 1) / (recipe.servings || 1);
       for (const ing of recipe.ingredients) {
         const key = itemKey(ing.name, ing.unit);
-        if (!map.has(key)) map.set(key, { key, name: ing.name.trim(), unit: ing.unit, amount: 0, recipes: [] });
+        const [amount, unit] = normUnit(ing.amount, ing.unit);
+        if (!map.has(key)) map.set(key, { key, name: ing.name.trim(), unit, amount: 0, recipes: [] });
         const item = map.get(key);
-        item.amount += ing.amount * scale;
+        item.amount += amount * scale;
         if (!item.recipes.includes(recipe.name)) item.recipes.push(recipe.name);
       }
     }
@@ -463,7 +466,7 @@ window.PF_STORE = (function () {
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }
   function roundAmount(v, unit) {
-    return unit === 'Stück' ? Math.round(v * 2) / 2 : Math.round(v);
+    return unit === 'Stück' || unit === 'EL' || unit === 'TL' ? Math.round(v * 2) / 2 : Math.round(v);
   }
 
   /*
@@ -563,7 +566,7 @@ window.PF_STORE = (function () {
       for (const ing of recipe.ingredients) {
         const key = itemKey(ing.name, ing.unit);
         if (!needs.has(key)) needs.set(key, { name: ing.name, amount: 0 });
-        needs.get(key).amount += ing.amount * scale;
+        needs.get(key).amount += normUnit(ing.amount, ing.unit)[0] * scale;
       }
       const missing = [];
       for (const [key, n] of needs) {
