@@ -1052,6 +1052,11 @@
           <input type="search" name="q" value="${esc(name)}" aria-label="Suchbegriff" />
           <button type="button" class="btn btn-primary" data-act="search">Suchen</button>
         </div>
+        <div class="scan-actions">
+          <button type="button" class="btn" data-act="scan-barcode">📷 Barcode scannen</button>
+          <label class="btn">🧾 Nährwerttabelle fotografieren<input type="file" accept="image/*" capture="environment" hidden data-act="label-photo" /></label>
+        </div>
+        <div class="scan-status" id="scanStatus" hidden></div>
         <p class="muted small">Durchsucht die eingebaute Tabelle, <b>Open Food Facts</b> (Produktdatenbank, deutsch) und <b>USDA FoodData Central</b> (Grundnahrungsmittel mit vielen Mikronährstoffen – englische Begriffe, z. B. „lentils“). Treffer anklicken übernimmt die Werte unten.</p>
         <div class="lookup-results" id="lookupResults"></div>
         <h3>Werte <small class="muted" id="lookupSource">Quelle: ${esc(existing.source || 'Manuell')}</small></h3>
@@ -1070,6 +1075,81 @@
     const form = $('form', dlg);
     let source = existing.source || 'Manuell';
     let results = [];
+
+    /* ----- Werte aus Barcode / Foto übernehmen ----- */
+    const status = $('#scanStatus', dlg);
+    const setStatus = (html, kind = '') => {
+      status.hidden = !html;
+      status.className = 'scan-status ' + kind;
+      status.innerHTML = html;
+    };
+    const fillForm = (nutrients, src, { mark = [], warn = [] } = {}) => {
+      for (const d of N.NUTRIENTS) {
+        const input = form[d.key];
+        input.value = nutrients[d.key] ?? '';
+        input.classList.toggle('filled', mark.includes(d.key));
+        input.classList.toggle('check', warn.includes(d.key));
+      }
+      source = src;
+      $('#lookupSource').textContent = 'Quelle: ' + src;
+    };
+    const fromLabelPhoto = async (file) => {
+      if (!file) return;
+      setStatus('<span class="spinner"></span> Lade Texterkennung … <small>(beim ersten Mal ca. 5 MB)</small>');
+      try {
+        const res = await window.PF_SCAN.nutritionFromLabelPhoto(file, (stage, p) => {
+          const pct = Math.round((p || 0) * 100);
+          setStatus(
+            stage === 'load'
+              ? `<span class="spinner"></span> Lade Texterkennung … ${pct ? pct + ' %' : ''} <small>(beim ersten Mal ca. 5 MB)</small>`
+              : `<span class="spinner"></span> Lese Nährwerttabelle … ${pct} %`
+          );
+        });
+        if (!res.found.length) {
+          setStatus(
+            '⚠ Keine Nährwerte erkannt. Tipp: Tabelle gerade und formatfüllend fotografieren, ohne Spiegelung – oder die Werte unten von Hand eintragen.' +
+              `<details><summary>Erkannter Text</summary><pre>${esc(res.text || '')}</pre></details>`,
+            'warn'
+          );
+          return;
+        }
+        fillForm(res.nutrients, 'Foto der Nährwerttabelle', { mark: res.found, warn: res.warnings });
+        const labels = res.found.map((k) => N.NUTRIENTS.find((n) => n.key === k).label);
+        setStatus(
+          `✓ ${res.found.length} Werte erkannt (${esc(labels.join(', '))}) – <b>bitte kurz mit der Packung vergleichen</b>.` +
+            (res.warnings.length ? ' Gelb markierte Felder wirken unplausibel.' : '') +
+            `<details><summary>Erkannter Text</summary><pre>${esc(res.text || '')}</pre></details>`,
+          res.warnings.length ? 'warn' : 'ok'
+        );
+      } catch (e) {
+        setStatus('⚠ Texterkennung fehlgeschlagen: ' + esc(e.message), 'warn');
+      }
+    };
+    const fromBarcode = async (code) => {
+      setStatus(`<span class="spinner"></span> Suche Produkt ${esc(code)} in Open Food Facts …`);
+      try {
+        const product = await N.fetchOffProduct(code);
+        if (!product || product.nutrients.kcal == null) {
+          setStatus(
+            `Produkt <b>${esc(code)}</b> ist ${product ? 'ohne Nährwerte ' : 'nicht '}in Open Food Facts. ` +
+              '<label class="btn btn-sm btn-primary">🧾 Stattdessen Nährwerttabelle fotografieren<input type="file" accept="image/*" capture="environment" hidden data-act="label-photo" /></label>',
+            'warn'
+          );
+          return;
+        }
+        fillForm(product.nutrients, `Open Food Facts: ${product.name} (${code})`, { mark: Object.keys(product.nutrients) });
+        setStatus(`✓ Gefunden: <b>${esc(product.name)}</b> – Werte pro 100 g übernommen.`, 'ok');
+      } catch (e) {
+        setStatus('⚠ Produktsuche fehlgeschlagen (keine Verbindung?): ' + esc(e.message), 'warn');
+      }
+    };
+    dlg.onchange = (ev) => {
+      if (ev.target.matches('[data-act="label-photo"]')) {
+        fromLabelPhoto(ev.target.files[0]);
+        ev.target.value = '';
+      }
+    };
+    lookupScan = { fromBarcode, fromLabelPhoto };
 
     const showResults = (groups) => {
       results = [];
@@ -1118,6 +1198,7 @@
     };
 
     dlg.onclick = (ev) => {
+      if (ev.target.closest('[data-act="scan-barcode"]')) openBarcodeScanner();
       if (ev.target.closest('[data-act="search"]')) doSearch();
       const r = ev.target.closest('.result');
       if (r) {
@@ -1151,6 +1232,66 @@
 
     showResults([{ title: 'Eingebaut', items: N.localMatches(name) }]);
     openDialog(dlg);
+  }
+
+  /* ================= Barcode-Scanner ================= */
+  let lookupScan = null; // Verbindung zum gerade offenen Nährwert-Dialog
+
+  async function openBarcodeScanner() {
+    const dlg = $('#scanDialog');
+    let stop = null;
+    dlg.innerHTML = `<div class="scanner">
+      <header class="dialog-head"><div><h2>📷 Barcode scannen</h2>
+        <span class="muted">Strichcode der Packung ins Bild halten</span></div>
+        <button class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body">
+        <div class="scan-video"><video muted playsinline></video><div class="scan-frame"></div></div>
+        <p class="small muted" id="scanMsg">Kamera wird gestartet …</p>
+        <div class="scan-alt">
+          <label class="btn btn-sm">🖼 Foto vom Barcode wählen<input type="file" accept="image/*" capture="environment" hidden data-act="barcode-photo" /></label>
+          <form class="scan-manual" data-act="manual">
+            <input name="code" inputmode="numeric" pattern="[0-9]*" placeholder="Nummer eintippen" aria-label="Barcode-Nummer" />
+            <button class="btn btn-sm">OK</button>
+          </form>
+        </div>
+      </div>
+    </div>`;
+    const finish = (code) => {
+      if (stop) stop();
+      dlg.close();
+      if (lookupScan) lookupScan.fromBarcode(code);
+    };
+    dlg.addEventListener('close', () => stop && stop(), { once: true });
+    dlg.onchange = async (ev) => {
+      if (!ev.target.matches('[data-act="barcode-photo"]')) return;
+      const file = ev.target.files[0];
+      if (!file) return;
+      $('#scanMsg', dlg).textContent = 'Lese Barcode aus dem Foto …';
+      try {
+        const code = await window.PF_SCAN.barcodeFromFile(file);
+        if (code) finish(code);
+        else $('#scanMsg', dlg).textContent = 'Kein Barcode erkannt – bitte näher und scharf fotografieren oder die Nummer eintippen.';
+      } catch (e) {
+        $('#scanMsg', dlg).textContent = 'Foto konnte nicht gelesen werden: ' + e.message;
+      }
+    };
+    $('form[data-act="manual"]', dlg).addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const code = ev.target.code.value.replace(/\D/g, '');
+      if (window.PF_SCAN.isValidBarcode(code)) finish(code);
+      else $('#scanMsg', dlg).textContent = 'Die Nummer scheint nicht zu stimmen (8 oder 13 Ziffern unter dem Strichcode).';
+    });
+    openDialog(dlg);
+    try {
+      stop = await window.PF_SCAN.startBarcodeScan($('video', dlg), finish);
+      $('#scanMsg', dlg).textContent = 'Suche Barcode … (ruhig halten, gutes Licht hilft)';
+    } catch (e) {
+      const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+      $('#scanMsg', dlg).textContent = denied
+        ? 'Kein Zugriff auf die Kamera – bitte im Browser erlauben, oder ein Foto vom Barcode wählen.'
+        : 'Kamera nicht verfügbar – du kannst ein Foto vom Barcode wählen oder die Nummer eintippen.';
+      $('.scan-video', dlg).hidden = true;
+    }
   }
 
   /* ================= Archiv ================= */

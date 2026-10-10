@@ -38,6 +38,10 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   Die **Tagessumme** im Kalender wird grün (alle Ziele erreicht) oder rot, darunter zeigt **„Woche gesamt“**
   Balken mit Wochensumme gegenüber dem Wochenziel.
 - **Rezepte löschen** in der Listenansicht: 🗑 je Rezept oder „Mehrere auswählen“ (auch ganze Kategorien) und gemeinsam löschen.
+- **Nährwerte per Kamera** (in der Nährwert-Suche einer Zutat): **📷 Barcode scannen** → Produkt in Open Food Facts
+  nachschlagen und Werte pro 100 g übernehmen; ist das Produkt nicht dort, **🧾 Nährwerttabelle fotografieren** →
+  Texterkennung direkt auf dem Gerät (Tesseract, ohne KI-Dienst/Server) liest die „pro 100 g“-Spalte aus. Ergebnisse
+  werden markiert und sollten kurz geprüft werden. Alternativ Foto vom Barcode wählen oder Nummer eintippen.
 - **Nährwerte**: pro Portion, pro Tag und pro Woche (Makros + Mikronährstoffe, sobald Daten vorhanden sind).
 
 ## Starten
@@ -106,6 +110,8 @@ js/foods.js        eingebaute Nährwerttabelle
 js/textrecipe.js   Rezept-Erkennung aus Text (Beschreibung/Bildunterschrift)
 manifest.webmanifest, sw.js, icons/   installierbare Web-App + Teilen-Menü (Android)
 js/sync.js         Geräte-Sync über privates GitHub-Repository (+ QR-Kopplung, js/vendor/qrcode.js, MIT)
+js/scanner.js      Barcode (BarcodeDetector bzw. js/vendor/zxing.min.js, Apache-2.0) & Texterkennung
+                   (js/vendor/tesseract, Apache-2.0, deutsches Sprachmodell) – nur bei Bedarf geladen
 js/importer.js     Excel-/CSV-Import (nutzt SheetJS in js/vendor, Apache-2.0)
 js/nutrition.js    Nährwert-Suche (Open Food Facts, USDA) & Berechnung
 js/store.js        Daten: Rezepte, Wochen, Einkaufsliste, Archiv, Speicherung

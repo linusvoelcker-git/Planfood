@@ -84,6 +84,37 @@ window.PF_NUTRITION = (function () {
     zinc: ['zinc_100g', 1e3],
   };
 
+  function mapOffNutriments(n = {}) {
+    const nutrients = {};
+    for (const [key, [field, factor]] of Object.entries(OFF_MAP)) {
+      const v = parseFloat(n[field]);
+      if (!isNaN(v)) nutrients[key] = round(v * factor);
+    }
+    if (nutrients.kcal == null && n['energy_100g'] != null) nutrients.kcal = round(parseFloat(n['energy_100g']) / 4.184);
+    return nutrients;
+  }
+
+  /** Produkt per Barcode (EAN) nachschlagen → { name, nutrients, ref } oder null */
+  async function fetchOffProduct(code) {
+    const url =
+      'https://world.openfoodfacts.org/api/v2/product/' +
+      encodeURIComponent(code) +
+      '.json?fields=code,product_name,product_name_de,brands,nutriments';
+    const res = await fetch(url);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('Open Food Facts: HTTP ' + res.status);
+    const data = await res.json();
+    if (!data || data.status !== 1 || !data.product) return null;
+    const p = data.product;
+    const name = p.product_name_de || p.product_name || '';
+    return {
+      source: 'Open Food Facts',
+      name: name ? (p.brands ? `${name} · ${p.brands.split(',')[0]}` : name) : `Produkt ${code}`,
+      nutrients: mapOffNutriments(p.nutriments),
+      ref: code,
+    };
+  }
+
   async function searchOpenFoodFacts(query) {
     const url =
       'https://world.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=12&lc=de' +
@@ -94,15 +125,7 @@ window.PF_NUTRITION = (function () {
     const data = await res.json();
     return (data.products || [])
       .map((p) => {
-        const n = p.nutriments || {};
-        const nutrients = {};
-        for (const [key, [field, factor]] of Object.entries(OFF_MAP)) {
-          const v = parseFloat(n[field]);
-          if (!isNaN(v)) nutrients[key] = round(v * factor);
-        }
-        if (nutrients.kcal == null && n['energy_100g'] != null) {
-          nutrients.kcal = round(parseFloat(n['energy_100g']) / 4.184);
-        }
+        const nutrients = mapOffNutriments(p.nutriments);
         const name = p.product_name_de || p.product_name || '(ohne Namen)';
         return {
           source: 'Open Food Facts',
@@ -208,6 +231,7 @@ window.PF_NUTRITION = (function () {
     localMatches,
     autoDetect,
     searchOpenFoodFacts,
+    fetchOffProduct,
     searchUSDA,
     gramsOf,
     emptyTotals,
