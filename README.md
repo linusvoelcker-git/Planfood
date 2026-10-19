@@ -102,7 +102,7 @@ Der Programmstand vor Einführung des Syncs liegt im Branch `backup/vor-sync`.
 
 | Quelle | Was | Vorteil | Nachteil |
 |---|---|---|---|
-| **Eingebaute Tabelle** (`js/foods.js`) | ~70 Grundzutaten, Makros + Gewicht pro Stück | sofort, offline, automatische Erkennung | nur Richtwerte, keine Mikros |
+| **Eingebaute Tabelle** (`js/foods.js`) | ~340 Zutaten (davon ~270 vegane mit Synonymen), Makros + Gewicht pro Stück; vegane Einträge meist mit Mikronährstoffen (USDA bzw. Herstelleretikett) | sofort, offline, automatische Erkennung | Richtwerte; Fertigprodukte variieren je nach Marke |
 | **Open Food Facts** | Produktdatenbank, deutsch, ohne Anmeldung | Markenprodukte, Barcodes | Mikronährstoffe nur lückenhaft |
 | **USDA FoodData Central** | Grundnahrungsmittel mit ~20 Mikronährstoffen | sehr vollständig | englische Suchbegriffe; eigener kostenloser API-Key empfohlen (⚙︎ Einstellungen) |
 
