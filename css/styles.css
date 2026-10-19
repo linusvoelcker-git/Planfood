@@ -1504,6 +1504,7 @@ button.tag.active {
   margin: 0.15rem 0 0;
 }
 .shop-count {
+  white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 1.2rem;
@@ -2823,4 +2824,429 @@ button.tag.active {
   border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--bg);
+}
+
+/* ============ Extras-Menü ============ */
+#extrasMenu {
+  left: 0;
+  right: auto;
+  min-width: 17rem;
+}
+.menu hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0.25rem 0.4rem;
+}
+
+/* ============ Mehrere Personen ============ */
+.cal-total-label {
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.person-switch {
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  max-width: 100%;
+  padding: 0.15rem 0.3rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+.mday-head .person-switch {
+  margin-left: auto;
+}
+.person-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+}
+.person-tab {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+.person-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.person-tab.add {
+  border-style: dashed;
+  color: var(--accent);
+}
+.profile-grid .span-3 {
+  grid-column: span 3;
+}
+.household-note {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  margin-top: 0;
+}
+.person-remove {
+  margin: 1.2rem 0 0;
+  padding-top: 0.8rem;
+  border-top: 1px dashed var(--line);
+}
+
+/* ============ Favoriten ============ */
+.fav-star {
+  color: #d9a400;
+  font-weight: 400;
+}
+.detail-head-btns {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.fav-btn {
+  font-size: 1.35rem;
+  color: var(--muted);
+}
+.fav-btn.on {
+  color: #d9a400;
+}
+.detail-when {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+/* ============ Einkaufsliste nach Bereichen ============ */
+.shop-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+.view-toggle.small button {
+  width: auto;
+  padding: 0 0.7rem;
+  font-size: 0.8rem;
+  filter: none;
+}
+.shop-list.grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.shop-group > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.shop-group h4 {
+  margin: 0;
+  padding: 0.25rem 0.1rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--accent-soft);
+}
+.shop-group h4 span {
+  color: var(--muted);
+  font-weight: 600;
+}
+.shop-group.done h4 {
+  color: var(--muted);
+}
+.sitem {
+  flex-wrap: wrap;
+}
+.sitem .mini.more {
+  opacity: 0.45;
+}
+.sitem:hover .mini.more,
+.sitem.open .mini.more,
+.sitem .mini.more:focus-visible {
+  opacity: 1;
+}
+.sitem-more {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.1rem 0 0.6rem 1.9rem;
+  font-size: 0.82rem;
+}
+.sitem-more select {
+  font: inherit;
+  margin-left: 0.3rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+.pantry-box {
+  margin-top: 0.75rem;
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+}
+.pantry-box summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+}
+.pantry-box ul {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+}
+.pantry-box li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+  color: var(--muted);
+}
+
+/* ============ Vorratsschrank ============ */
+.pantry-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+.pantry-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.4rem 0.25rem 0.75rem;
+  background: var(--accent-soft);
+  border: 1px solid transparent;
+  font-size: 0.88rem;
+}
+.pantry-chip button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+}
+.pantry-chip.suggest {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  padding-right: 0.75rem;
+  cursor: pointer;
+  color: var(--text);
+}
+.pantry-chip.suggest:hover {
+  border-color: var(--accent);
+}
+.pantry-sub {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ============ Woche füllen ============ */
+.check-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.check-chip {
+  --t: var(--accent);
+  position: relative;
+}
+.check-chip input {
+  position: absolute;
+  opacity: 0;
+}
+.check-chip span {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.check-chip input:checked + span {
+  background: var(--t);
+  border-color: var(--t);
+  color: #fff;
+}
+.check-chip input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch-row {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin: 0.5rem 0;
+  cursor: pointer;
+}
+.switch-row input {
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+}
+.fill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fill-list li {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.9rem;
+}
+
+/* ============ Was kann ich kochen? ============ */
+.cook-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+.cook-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.7rem;
+  border-left: 4px solid var(--c);
+  background: var(--surface-2);
+  border-radius: 8px;
+  margin-bottom: 0.45rem;
+}
+.cook-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.cook-meter {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+  max-width: 14rem;
+}
+.cook-meter i {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+.ok-text {
+  color: var(--ok);
+  font-weight: 600;
+}
+.cook-btns {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 720px) {
+  .cook-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .profile-grid .span-3 {
+    grid-column: span 2;
+  }
+  #extrasBtn {
+    font-size: 0;
+    padding: 0.45rem 0.65rem;
+  }
+  #extrasBtn::before {
+    content: '✨';
+    font-size: 0.95rem;
+  }
+  #extrasMenu {
+    left: auto;
+    position: fixed;
+    top: 3.6rem;
+    right: 0.75rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+}
+
+/* ============ Drucken ============ */
+.print-area {
+  display: none;
+}
+@media print {
+  body[data-print] > *:not(#printArea) {
+    display: none !important;
+  }
+  body[data-print] {
+    background: #fff;
+    color: #000;
+    padding: 0 !important;
+  }
+  body[data-print] .print-area {
+    display: block;
+    font-family: var(--font-body, sans-serif);
+  }
+  .print-area h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  .print-area > p {
+    margin: 0.1rem 0 1rem;
+    color: #555;
+  }
+  .print-plan {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    table-layout: fixed;
+  }
+  .print-plan th,
+  .print-plan td {
+    border: 1px solid #999;
+    padding: 0.3rem;
+    vertical-align: top;
+    text-align: left;
+  }
+  .print-plan thead th {
+    background: #eee;
+  }
+  .print-plan td div {
+    margin-bottom: 0.25rem;
+  }
+  .print-groups {
+    columns: 2;
+    column-gap: 2rem;
+  }
+  .print-groups section {
+    break-inside: avoid;
+    margin-bottom: 0.8rem;
+  }
+  .print-groups h2 {
+    font-size: 0.95rem;
+    margin: 0 0 0.25rem;
+    border-bottom: 1px solid #999;
+  }
+  .print-groups ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  @page {
+    margin: 1.2cm;
+  }
 }

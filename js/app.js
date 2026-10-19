@@ -40,6 +40,9 @@
     cardView: loadPref('planfood:cardView', isPhone() ? 'list' : 'cards'), // 'cards' (Karteikasten) | 'list'
     mview: 'plan', // Handy: 'plan' | 'recipes' | 'shop'
     drag: null, // { type: 'recipe'|'entry', id }
+    favOnly: false, // Kartei: nur Favoriten
+    shopSort: loadPref('planfood:shopSort', 'aisle'), // Einkaufsliste: 'aisle' (nach Bereich) | 'az'
+    shopMore: null, // Einkaufsliste: aufgeklappter Eintrag („⋯“)
   };
 
   /* ================= Hilfsfunktionen ================= */
@@ -127,7 +130,14 @@
   }
 
   function openDialog(dlg) {
-    if (!dlg.open) dlg.showModal();
+    if (!dlg.open) {
+      dlg.dataset.dirty = '';
+      dlg.showModal();
+    }
+  }
+  /** Dialog hat ungespeicherte Eingaben (Esc fragt dann nach) */
+  function markDirty(dlg) {
+    if (['editorDialog', 'profileDialog', 'linkDialog', 'settingsDialog'].includes(dlg.id)) dlg.dataset.dirty = '1';
   }
 
   function currentWeek() {
@@ -141,7 +151,8 @@
   /* ================= Kopfzeile ================= */
   function renderHeader() {
     const b = S.bmi();
-    $('#profileBtn').innerHTML = `👤 Profil${b ? ` <span class="bmi-chip ${b.level}">BMI ${fmtNum(b.value, 1)}</span>` : ''}`;
+    const multi = S.persons().length > 1;
+    $('#profileBtn').innerHTML = `👤 ${multi ? esc(S.activePerson().name) : 'Profil'}${b ? ` <span class="bmi-chip ${b.level}">BMI ${fmtNum(b.value, 1)}</span>` : ''}`;
     const { kw, range } = weekLabel(ui.viewStart);
     $('#weekTitle').textContent = kw;
     $('#weekRange').textContent = range;
@@ -193,7 +204,7 @@
     }
 
     // Tagessumme – grün/rot je nachdem, ob die Tagesziele aus dem Profil erreicht werden
-    html += '<div class="cal-meal cal-total-label"><span>Tagessumme</span></div>';
+    html += `<div class="cal-meal cal-total-label"><span>Tagessumme</span>${personSwitch()}</div>`;
     for (let d = 0; d < 7; d++) html += dayTotalHTML(totals && totals[d]);
 
     // Woche gesamt – Balken je Ziel (oder Summen, solange keine Ziele gesetzt sind)
@@ -224,8 +235,18 @@
       if (t && t.values.kcal) html += dayTotalHTML(t);
       html += '</section>';
     }
-    html += `<section class="mday mweek"><header class="mday-head"><strong>Woche gesamt</strong></header><div class="week-total">${weekBars(totals)}</div></section>`;
+    html += `<section class="mday mweek"><header class="mday-head"><strong>Woche gesamt</strong>${personSwitch()}</header><div class="week-total">${weekBars(totals)}</div></section>`;
     cal.innerHTML = html;
+  }
+
+  /** Auswahl, für wen die Nährwerte und Ziele angezeigt werden (nur bei mehreren Personen) */
+  function personSwitch() {
+    const list = S.persons();
+    if (list.length < 2) return '';
+    const cur = S.activePerson().id;
+    return `<select class="person-switch" aria-label="Nährwerte anzeigen für" title="Nährwerte und Ziele anzeigen für">${list
+      .map((p) => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>👤 ${esc(p.name)}</option>`)
+      .join('')}</select>`;
   }
 
   function dayTotalHTML(t) {
@@ -343,11 +364,11 @@
     // gelöschte Tags aus dem Filter werfen
     for (const id of ui.tagFilter) if (!S.getTag(id)) ui.tagFilter.delete(id);
     const matchesSearch = (r) => !q || N.norm(r.name).includes(q) || r.ingredients.some((i) => N.norm(i.name).includes(q));
-    const matchesTags = (r) => [...ui.tagFilter].every((id) => (r.tags || []).includes(id));
+    const matchesTags = (r) => (!ui.favOnly || r.fav) && [...ui.tagFilter].every((id) => (r.tags || []).includes(id));
     const recipes = S.state.recipes.filter((r) => matchesSearch(r) && matchesTags(r));
     renderTagFilter(S.state.recipes.filter(matchesSearch), recipes.length);
     if (!recipes.length) {
-      const filtered = q || ui.tagFilter.size;
+      const filtered = q || ui.tagFilter.size || ui.favOnly;
       inner.innerHTML = `<div class="cardbox-empty">${filtered ? 'Kein Rezept passt zu Suche/Filter.' : 'Noch keine Rezepte – leg dein erstes an!'}</div>`;
       return;
     }
@@ -371,7 +392,7 @@
         const per = S.recipePerServing(r);
         const kcal = per.values.kcal;
         html += `<article class="rcard" draggable="true" tabindex="0" data-id="${r.id}" style="--c:${r.color};--tab:${(k % 3) * 27}%;--i:${i++}">
-          <div class="rcard-tab"><span>${esc(r.name)}</span></div>
+          <div class="rcard-tab"><span>${r.fav ? '<b class="fav-star" title="Favorit">★</b> ' : ''}${esc(r.name)}</span></div>
           <div class="rcard-body">
             <div class="rcard-meta">
               <span>${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}</span>
@@ -419,7 +440,7 @@
           const on = ui.selected.has(r.id);
           return `<li class="ritem${on ? ' selected' : ''}" ${sel ? `aria-selected="${on}"` : 'draggable="true"'} tabindex="0" data-id="${r.id}" style="--c:${r.color}">
             ${sel ? '<span class="ritem-check" aria-hidden="true"></span>' : ''}
-            <span class="ritem-name">${esc(r.name)}</span>
+            <span class="ritem-name">${r.fav ? '<b class="fav-star" title="Favorit">★</b> ' : ''}${esc(r.name)}</span>
             ${sel ? '' : `<button class="ritem-del" data-del="${r.id}" title="Rezept löschen" aria-label="${esc(r.name)} löschen">🗑</button>`}
           </li>`;
         })
@@ -451,11 +472,17 @@
   /** Filterleiste über der Kartei: Tags als farbige Chips mit Trefferanzahl. */
   function renderTagFilter(pool, shown) {
     const bar = $('#tagFilter');
-    if (!S.state.tags.length) {
+    const favs = pool.filter((r) => r.fav).length;
+    if (!S.state.tags.length && !favs && !ui.favOnly) {
       bar.innerHTML = '';
       return;
     }
+    const favChip =
+      favs || ui.favOnly
+        ? `<button class="tag filter fav-filter${ui.favOnly ? ' active' : ''}" data-fav-filter style="--t:#d9a400" aria-pressed="${ui.favOnly}">★ Favoriten<span class="tag-count">${favs}</span></button>`
+        : '';
     bar.innerHTML =
+      favChip +
       S.state.tags
         .map((t) => {
           const on = ui.tagFilter.has(t.id);
@@ -463,7 +490,7 @@
           return `<button class="tag filter${on ? ' active' : ''}" data-tag="${t.id}" style="--t:${t.color}" aria-pressed="${on}">${esc(t.name)}<span class="tag-count">${count}</span></button>`;
         })
         .join('') +
-      (ui.tagFilter.size
+      (ui.tagFilter.size || ui.favOnly
         ? `<button class="tag-reset" data-tag-reset>✕ Filter (${shown})</button>`
         : '');
   }
@@ -476,15 +503,17 @@
     const ro = isReadOnly();
     const badge = $('#shoppingBadge');
     const { kw } = weekLabel(ui.viewStart);
-    const items = S.shoppingItems(week);
+    const all = S.shoppingItems(week);
+    const pantry = all.filter((i) => i.pantry);
+    const items = all.filter((i) => !i.pantry);
     const done = items.filter((i) => i.checked).length;
     const open = items.length - done;
 
     badge.hidden = !items.length;
     badge.textContent = `${done}/${items.length}`;
     const navBadge = $('#navShopBadge');
-    navBadge.hidden = !(items.length - done);
-    navBadge.textContent = items.length - done;
+    navBadge.hidden = !open;
+    navBadge.textContent = open;
     // kleiner Hüpfer, wenn neue Einträge dazukommen
     if (ui.lastOpen != null && ui.lastWeek === ui.viewStart && open > ui.lastOpen) {
       badge.classList.remove('bump');
@@ -500,22 +529,68 @@
           <input name="item" placeholder="Weiteres hinzufügen (z. B. Spülmittel)" aria-label="Eigener Eintrag" />
           <button class="btn btn-sm">＋</button>
         </form>`;
+    const pantryBox = pantry.length
+      ? `<details class="pantry-box"><summary>🧂 Im Vorrat (${pantry.length}) <small>– wird nicht eingekauft</small></summary>
+          <ul>${pantry
+            .map(
+              (i) => `<li><span>${i.unit ? `${fmtAmount(i.amount, i.unit)} ` : ''}${esc(i.name)}</span>${
+                ro ? '' : `<button class="link" data-act="unpantry" data-name="${esc(i.name)}">doch einkaufen</button>`
+              }</li>`
+            )
+            .join('')}</ul></details>`
+      : '';
 
     if (!items.length) {
       panel.innerHTML = `<div class="empty-state">
         <div class="empty-icon">🧺</div>
         <h3>Einkaufsliste · ${kw}</h3>
         <p class="muted">Zieh Rezepte in den Kalender – ihre Zutaten landen automatisch hier.</p>
-      </div>${addForm}`;
+      </div>${addForm}${pantryBox}`;
       return;
     }
 
-    const sorted = [...items].sort((a, b) => a.checked - b.checked || a.name.localeCompare(b.name, 'de'));
     const pct = Math.round((done / items.length) * 100);
     const sub = (i) => {
       if (i.extraTo) return `<span class="sitem-sub extra">＋ zusätzlich (${fmtAmount(i.extraTo, i.unit)} schon abgehakt)</span>`;
       return i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : '';
     };
+    const byName = (a, b) => a.checked - b.checked || a.name.localeCompare(b.name, 'de');
+    const itemHTML = (i) => {
+      const more = ui.shopMore === i.id;
+      return `<li class="sitem${i.checked ? ' checked' : ''}${i.extraTo ? ' extra' : ''}${more ? ' open' : ''}">
+        <label>
+          <input type="checkbox" data-key="${esc(i.id)}" ${i.checked ? 'checked' : ''} ${ro ? 'disabled' : ''} />
+          <span class="check" aria-hidden="true"></span>
+          <span class="sitem-text">
+            <span class="sitem-main">${i.unit ? `<span class="amt">${fmtAmount(i.amount, i.unit)}</span> ` : ''}${esc(i.name)}</span>
+            ${sub(i)}
+          </span>
+        </label>
+        ${i.manual && !ro ? `<button class="mini" data-act="remove-item" data-key="${esc(i.id)}" aria-label="Entfernen">×</button>` : ''}
+        ${ro ? '' : `<button class="mini more" data-act="more" data-key="${esc(i.id)}" aria-label="Mehr zu ${esc(i.name)}" aria-expanded="${more}">⋯</button>`}
+        ${
+          more
+            ? `<div class="sitem-more">
+                <label>Bereich <select data-act="aisle" data-name="${esc(i.name)}">${S.AISLE_NAMES.map(
+                  (n) => `<option ${S.aisleOf(i.name) === n ? 'selected' : ''}>${esc(n)}</option>`
+                ).join('')}</select></label>
+                ${i.manual ? '' : `<button class="btn btn-sm" data-act="pantry" data-name="${esc(i.name)}">🧂 Hab ich immer da</button>`}
+              </div>`
+            : ''
+        }
+      </li>`;
+    };
+    const mode = ui.shopSort;
+    const listHTML =
+      mode === 'aisle'
+        ? groupByAisle(items)
+            .map(([sec, list]) => {
+              const left = list.filter((i) => !i.checked).length;
+              return `<li class="shop-group${left ? '' : ' done'}"><h4>${esc(sec)} <span>${left ? left : '✓'}</span></h4>
+                <ul>${list.sort(byName).map(itemHTML).join('')}</ul></li>`;
+            })
+            .join('')
+        : [...items].sort(byName).map(itemHTML).join('');
 
     panel.innerHTML = `<div class="shop-head">
         <div>
@@ -524,26 +599,17 @@
         </div>
         <span class="shop-count">${done} / ${items.length}</span>
       </div>
+      <div class="shop-tools">
+        <div class="view-toggle small" role="group" aria-label="Sortierung">
+          <button data-act="sort" data-sort="aisle" class="${mode === 'aisle' ? 'active' : ''}" aria-pressed="${mode === 'aisle'}">🏪 Nach Bereich</button>
+          <button data-act="sort" data-sort="az" class="${mode === 'az' ? 'active' : ''}" aria-pressed="${mode === 'az'}">A–Z</button>
+        </div>
+      </div>
       <div class="progress"><span style="width:${pct}%"></span></div>
       ${pct === 100 ? '<div class="all-done">🎉 Alles da – guten Appetit!</div>' : ''}
-      <ul class="shop-list">
-        ${sorted
-          .map(
-            (i) => `<li class="sitem${i.checked ? ' checked' : ''}${i.extraTo ? ' extra' : ''}">
-            <label>
-              <input type="checkbox" data-key="${esc(i.id)}" ${i.checked ? 'checked' : ''} ${ro ? 'disabled' : ''} />
-              <span class="check" aria-hidden="true"></span>
-              <span class="sitem-text">
-                <span class="sitem-main">${i.unit ? `<span class="amt">${fmtAmount(i.amount, i.unit)}</span> ` : ''}${esc(i.name)}</span>
-                ${sub(i)}
-              </span>
-            </label>
-            ${i.manual && !ro ? `<button class="mini" data-act="remove-item" data-key="${esc(i.id)}" aria-label="Entfernen">×</button>` : ''}
-          </li>`
-          )
-          .join('')}
-      </ul>
+      <ul class="shop-list${mode === 'aisle' ? ' grouped' : ''}">${listHTML}</ul>
       ${addForm}
+      ${pantryBox}
       ${
         ro
           ? ''
@@ -551,6 +617,7 @@
           <button class="btn btn-sm" data-act="check-all">Alle abhaken</button>
           <button class="btn btn-sm" data-act="uncheck-all">Alle zurücksetzen</button>
           <button class="btn btn-sm" data-act="copy-list">📋 Als Text kopieren</button>
+          <button class="btn btn-sm" data-act="print-list">🖨 Drucken</button>
         </div>`
       }`;
   }
@@ -564,19 +631,24 @@
     const first = { breakfast: 'Frühstück', snack: 'Snack' }[meal] || 'Hauptgericht';
     const cats = [first, ...S.CATEGORIES.filter((c) => c !== first)];
     let q = '';
+    const FAV = '★ Favoriten';
     const render = () => {
       const nq = N.norm(q);
       const recipes = S.state.recipes.filter((r) => !nq || N.norm(r.name).includes(nq) || r.ingredients.some((i) => N.norm(i.name).includes(nq)));
+      // Favoriten der passenden Kategorie ganz oben (ohne Suche)
+      const groups = nq ? cats : [FAV, ...cats];
       $('#pickerList', dlg).innerHTML =
-        cats
+        groups
           .map((cat) => {
-            const items = recipes.filter((r) => (r.category || 'Sonstiges') === cat).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+            const items = recipes
+              .filter((r) => (cat === FAV ? r.fav && (r.category || 'Sonstiges') === first : (r.category || 'Sonstiges') === cat))
+              .sort((a, b) => a.name.localeCompare(b.name, 'de'));
             if (!items.length) return '';
             return `<h4 class="rlist-head">${esc(cat)} <span>${items.length}</span></h4><ul class="rlist">${items
               .map((r) => {
                 const kcal = S.recipePerServing(r).values.kcal;
                 return `<li class="ritem pick-item" tabindex="0" data-id="${r.id}" style="--c:${r.color}">
-                  <span class="ritem-name">${esc(r.name)}</span>
+                  <span class="ritem-name">${r.fav ? '<b class="fav-star">★</b> ' : ''}${esc(r.name)}</span>
                   <span class="rcard-dots">${tagsOf(r).map((t) => `<i style="--t:${t.color}"></i>`).join('')}</span>
                   ${kcal ? `<span class="pick-kcal">${fmtNum(kcal)} kcal</span>` : ''}
                 </li>`;
@@ -655,6 +727,19 @@
     const scale = entry ? entry.servings / recipe.servings : 1;
     const st = entry ? S.entryStatus(week, entry) : null;
     const per = S.recipePerServing(recipe);
+    const live = S.state.recipes.some((r) => r.id === recipe.id);
+    const when = S.lastPlanned(recipe.id);
+    const fmtDate = (iso) => {
+      const d = S.parseISO(iso);
+      return `${S.DAY_NAMES[(d.getDay() + 6) % 7].slice(0, 2)}, ${d.getDate()}.${d.getMonth() + 1}.`;
+    };
+    const daysAgo = (iso) => Math.round((new Date(S.isoDate(new Date())) - new Date(iso)) / 864e5);
+    const whenLine =
+      when.past || when.next
+        ? `<span class="detail-when">${when.past ? `🕑 Zuletzt: ${fmtDate(when.past)}${daysAgo(when.past) > 0 ? ` (vor ${daysAgo(when.past)} ${daysAgo(when.past) === 1 ? 'Tag' : 'Tagen'})` : ' (heute)'}` : ''}${
+            when.past && when.next ? ' · ' : ''
+          }${when.next ? `📅 Nächstes Mal: ${fmtDate(when.next)}` : ''}</span>`
+        : '<span class="detail-when">Noch nie geplant</span>';
 
     const ingRows = recipe.ingredients
       .map((ing) => {
@@ -699,8 +784,18 @@
           <h2>${esc(recipe.name)}</h2>
           ${tagsOf(recipe).length ? `<div class="detail-tags">${tagsOf(recipe).map((t) => tagPill(t)).join('')}</div>` : ''}
           <span class="muted">Rezept für ${recipe.servings} ${recipe.servings === 1 ? 'Portion' : 'Portionen'}</span>
+          ${whenLine}
         </div>
-        <button class="icon-btn" data-close aria-label="Schließen">✕</button>
+        <div class="detail-head-btns">
+          ${
+            live
+              ? `<button class="icon-btn fav-btn${recipe.fav ? ' on' : ''}" data-act="d-fav" aria-pressed="${!!recipe.fav}" title="${
+                  recipe.fav ? 'Aus Favoriten entfernen' : 'Als Favorit merken'
+                }" aria-label="Favorit">${recipe.fav ? '★' : '☆'}</button>`
+              : ''
+          }
+          <button class="icon-btn" data-close aria-label="Schließen">✕</button>
+        </div>
       </header>
       <div class="dialog-body">
         ${entryInfo}
@@ -789,6 +884,10 @@
       case 'd-plan':
         $('#detailDialog').close();
         openPlanDialog(recipeId);
+        break;
+      case 'd-fav':
+        S.toggleFavorite(recipeId);
+        toast(S.state.recipes.find((r) => r.id === recipeId)?.fav ? '★ Als Favorit gemerkt' : 'Aus Favoriten entfernt');
         break;
       case 'lookup':
         openLookup(btn.dataset.name, () => renderAll());
@@ -1641,14 +1740,36 @@
     openLinkImport({ url: url || (onlyLink ? text.trim() : ''), text: onlyLink ? '' : text, title });
   }
 
-  /* ================= Profil ================= */
-  function openProfile() {
+  /* ================= Profil (eine oder mehrere Personen) ================= */
+  const PORTIONS = [
+    [0.5, 'Kinderportion (½)'],
+    [0.75, 'kleine Portion (¾)'],
+    [1, 'normale Portion'],
+    [1.25, 'große Portion (1¼)'],
+    [1.5, 'sehr große Portion (1½)'],
+  ];
+  const ACTIVITY = [
+    [1.2, 'kaum Bewegung (Bürojob, kein Sport)'],
+    [1.375, 'leicht aktiv (1–2× Sport/Woche)'],
+    [1.55, 'mäßig aktiv (3–5× Sport/Woche)'],
+    [1.725, 'sehr aktiv (6–7× Sport/Woche)'],
+    [1.9, 'extrem aktiv (körperliche Arbeit + Sport)'],
+  ];
+
+  function openProfile(personId) {
     const dlg = $('#profileDialog');
-    const p = S.state.profile;
-    const goalRows = S.GOAL_DEFS.map(({ key }) => {
-      const def = N.NUTRIENTS.find((n) => n.key === key);
-      const g = p.goals[key];
-      return `<div class="goal-row" data-key="${key}">
+    // Entwurf aller Personen – gespeichert wird erst mit „Speichern“
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+    const drafts = S.persons().map(clone);
+    const removed = [];
+    let cur = (personId && drafts.find((p) => p.id === personId) ? personId : S.activePerson().id);
+    const draft = () => drafts.find((p) => p.id === cur);
+
+    const goalRows = (p) =>
+      S.GOAL_DEFS.map(({ key }) => {
+        const def = N.NUTRIENTS.find((n) => n.key === key);
+        const g = p.goals[key];
+        return `<div class="goal-row" data-key="${key}">
         <span class="goal-name">${def.label}</span>
         <select name="mode-${key}" aria-label="Art des Ziels für ${def.label}">
           ${Object.entries(GOAL_HINT).map(([m, l]) => `<option value="${m}" ${g.mode === m ? 'selected' : ''}>${l}</option>`).join('')}
@@ -1659,33 +1780,41 @@
           <option value="week" ${g.period === 'week' ? 'selected' : ''}>pro Woche</option>
         </select>
       </div>`;
-    }).join('');
-    const log = [...p.weightLog].reverse().slice(0, 8);
+      }).join('');
 
-    dlg.innerHTML = `<form method="dialog" class="profile">
-      <header class="dialog-head"><div><h2>👤 Mein Profil</h2>
-        <span class="muted">Wird nur in diesem Browser gespeichert</span></div>
-        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
-      <div class="dialog-body">
+    const tabs = () =>
+      `<div class="person-tabs" role="tablist" aria-label="Personen">${drafts
+        .map((p) => `<button type="button" role="tab" class="person-tab${p.id === cur ? ' active' : ''}" data-person="${p.id}" aria-selected="${p.id === cur}">👤 ${esc(p.name || 'Ohne Namen')}</button>`)
+        .join('')}<button type="button" class="person-tab add" data-act="add-person">＋ Person</button></div>`;
+
+    const body = (p) => {
+      const log = [...(p.weightLog || [])].reverse().slice(0, 8);
+      const multi = drafts.length > 1;
+      return `${tabs()}
+        <div class="profile-grid">
+          <label class="field"><span>Name</span><input name="name" maxlength="30" value="${esc(p.name)}" /></label>
+          <label class="field span-3"><span>Portionsgröße <small>wie viel diese Person pro Mahlzeit isst</small></span><select name="portion">
+            ${PORTIONS.map(([v, l]) => `<option value="${v}" ${Number(p.portion) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        </div>
+        ${
+          multi
+            ? `<p class="muted small household-note">👨‍👩‍👧 <strong>Haushalt mit ${drafts.length} Personen:</strong> Neue Mahlzeiten werden automatisch für alle
+                geplant (${fmtNum(drafts.reduce((s, x) => s + (Number(x.portion) || 1), 0), 2)} Portionen). Die Nährwerte im Kalender zeigen den Anteil
+                der Person, die dort ausgewählt ist.</p>`
+            : `<p class="muted small household-note">Kocht ihr zu zweit oder als Familie? Mit „＋ Person“ bekommt jede Person eigene Ziele –
+                Mahlzeiten werden dann automatisch für alle geplant.</p>`
+        }
         <h3>Körperdaten</h3>
         <div class="profile-grid">
           <label class="field"><span>Gewicht <small>kg</small></span><input type="number" min="20" max="400" step="0.1" name="weightKg" value="${p.weightKg ?? ''}" /></label>
-          <label class="field"><span>Größe <small>cm</small></span><input type="number" min="100" max="250" step="1" name="heightCm" value="${p.heightCm ?? ''}" /></label>
-          <label class="field"><span>Alter</span><input type="number" min="10" max="120" step="1" name="age" value="${p.age ?? ''}" /></label>
+          <label class="field"><span>Größe <small>cm</small></span><input type="number" min="50" max="250" step="1" name="heightCm" value="${p.heightCm ?? ''}" /></label>
+          <label class="field"><span>Alter</span><input type="number" min="1" max="120" step="1" name="age" value="${p.age ?? ''}" /></label>
           <label class="field"><span>Geschlecht</span><select name="sex">
             <option value="" ${!p.sex ? 'selected' : ''}>–</option>
             <option value="w" ${p.sex === 'w' ? 'selected' : ''}>weiblich</option>
             <option value="m" ${p.sex === 'm' ? 'selected' : ''}>männlich</option></select></label>
           <label class="field span-2"><span>Aktivität</span><select name="activity">
-            ${[
-              [1.2, 'kaum Bewegung (Bürojob, kein Sport)'],
-              [1.375, 'leicht aktiv (1–2× Sport/Woche)'],
-              [1.55, 'mäßig aktiv (3–5× Sport/Woche)'],
-              [1.725, 'sehr aktiv (6–7× Sport/Woche)'],
-              [1.9, 'extrem aktiv (körperliche Arbeit + Sport)'],
-            ]
-              .map(([v, l]) => `<option value="${v}" ${Number(p.activity) === v ? 'selected' : ''}>${l}</option>`)
-              .join('')}</select></label>
+            ${ACTIVITY.map(([v, l]) => `<option value="${v}" ${Number(p.activity) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
         <div class="bmi-box" id="bmiBox"></div>
         ${
@@ -1699,27 +1828,44 @@
         <h3>Ziele</h3>
         <p class="muted small">Die Tagessumme im Kalender wird grün, wenn alle Ziele des Tages erreicht sind, sonst rot.
           Wochenziele werden auf 7 Tage verteilt. „Ungefähr“ heißt ±10 %, „mindestens“/„höchstens“ mit 5 % Spielraum. Leer = kein Ziel.</p>
-        <div class="goal-table">${goalRows}</div>
+        <div class="goal-table">${goalRows(p)}</div>
         <button type="button" class="btn btn-sm" data-act="suggest">✨ Vorschlag aus Körperdaten</button>
         <p class="muted small" id="suggestHint">Grobe Schätzung (Mifflin-St Jeor × Aktivität, 1,6 g Eiweiß/kg, 30 % Fett) – braucht Gewicht, Größe, Alter und Geschlecht. Ersetzt keine Beratung.</p>
-      </div>
+        ${multi ? `<p class="person-remove"><button type="button" class="btn btn-sm btn-danger" data-act="remove-person">🗑 ${esc(p.name)} entfernen</button></p>` : ''}`;
+    };
+
+    dlg.innerHTML = `<form method="dialog" class="profile">
+      <header class="dialog-head"><div><h2>👤 Profil</h2>
+        <span class="muted">Körperdaten und Ziele – einzeln oder für den ganzen Haushalt</span></div>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body" id="profileBody"></div>
       <footer class="dialog-foot"><button type="button" class="btn" data-close>Abbrechen</button><button class="btn btn-primary">Speichern</button></footer>
     </form>`;
-
     const form = $('form', dlg);
-    const read = () => {
-      const num = (n) => {
-        const v = parseFloat(String(form[n].value).replace(',', '.'));
-        return v > 0 ? v : null;
-      };
-      return {
-        weightKg: num('weightKg'),
-        heightCm: num('heightCm'),
-        age: num('age'),
-        sex: form.sex.value,
-        activity: parseFloat(form.activity.value),
-      };
+
+    const num = (n) => {
+      const v = parseFloat(String(form[n].value).replace(',', '.'));
+      return v > 0 ? v : null;
     };
+    const read = () => ({
+      name: form.name.value.trim() || draft().name || 'Ich',
+      portion: parseFloat(form.portion.value) || 1,
+      weightKg: num('weightKg'),
+      heightCm: num('heightCm'),
+      age: num('age'),
+      sex: form.sex.value,
+      activity: parseFloat(form.activity.value),
+    });
+    const readGoals = () => {
+      const goals = {};
+      for (const { key } of S.GOAL_DEFS) {
+        const v = parseFloat(String(form['goal-' + key].value).replace(',', '.'));
+        goals[key] = { value: v > 0 ? v : null, period: form['period-' + key].value, mode: form['mode-' + key].value };
+      }
+      return goals;
+    };
+    /** aktuelle Eingaben in den Entwurf übernehmen */
+    const commit = () => Object.assign(draft(), read(), { goals: readGoals() });
     const renderBmi = () => {
       const b = S.bmi(read());
       // Skala 15–35, Bereiche: <18,5 | 18,5–25 | 25–30 | >30
@@ -1729,35 +1875,398 @@
            <div class="bmi-legend"><span>15</span><span>18,5</span><span>25</span><span>30</span><span>35</span></div>`
         : '<span class="muted small">BMI erscheint, sobald Gewicht und Größe eingetragen sind.</span>';
     };
+    const render = () => {
+      $('#profileBody', dlg).innerHTML = body(draft());
+      renderBmi();
+    };
+
     form.addEventListener('input', (ev) => {
       if (['weightKg', 'heightCm'].includes(ev.target.name)) renderBmi();
+      if (ev.target.name === 'name') {
+        const tab = $(`.person-tab[data-person="${cur}"]`, dlg);
+        if (tab) tab.textContent = '👤 ' + (ev.target.value.trim() || 'Ohne Namen');
+      }
     });
     dlg.onclick = (ev) => {
-      if (!ev.target.closest('[data-act="suggest"]')) return;
-      const sug = S.suggestGoals(read());
-      if (!sug) {
-        $('#suggestHint', dlg).innerHTML = '<span class="warn">Bitte zuerst Gewicht, Größe, Alter und Geschlecht eintragen.</span>';
+      const tab = ev.target.closest('[data-person]');
+      if (tab) {
+        commit();
+        cur = tab.dataset.person;
+        render();
         return;
       }
-      for (const [k, v] of Object.entries(sug)) {
-        form['goal-' + k].value = v;
-        form['period-' + k].value = 'day';
+      const act = ev.target.closest('[data-act]');
+      if (!act) return;
+      if (act.dataset.act === 'add-person') {
+        commit();
+        const p = { id: 'neu-' + S.uid(), isNew: true, name: `Person ${drafts.length + 1}`, weightKg: null, heightCm: null, age: null, sex: '', activity: 1.55, portion: 1, weightLog: [], goals: {} };
+        for (const g of S.GOAL_DEFS) p.goals[g.key] = { value: null, period: 'day', mode: g.mode };
+        drafts.push(p);
+        cur = p.id;
+        render();
+        form.name.select();
+        markDirty(dlg);
       }
-      $('#suggestHint', dlg).innerHTML = `Vorschlag eingetragen (≈ ${fmtNum(sug.kcal)} kcal/Tag) – du kannst alles noch anpassen und dann speichern.`;
+      if (act.dataset.act === 'remove-person') {
+        if (drafts.length < 2 || !confirm(`${draft().name} aus dem Profil entfernen? Körperdaten und Ziele dieser Person gehen verloren.`)) return;
+        if (!draft().isNew) removed.push(cur);
+        drafts.splice(drafts.indexOf(draft()), 1);
+        cur = drafts[0].id;
+        render();
+        markDirty(dlg);
+      }
+      if (act.dataset.act === 'suggest') {
+        const sug = S.suggestGoals(read());
+        if (!sug) {
+          $('#suggestHint', dlg).innerHTML = '<span class="warn">Bitte zuerst Gewicht, Größe, Alter und Geschlecht eintragen.</span>';
+          return;
+        }
+        for (const [k, v] of Object.entries(sug)) {
+          form['goal-' + k].value = v;
+          form['period-' + k].value = 'day';
+        }
+        $('#suggestHint', dlg).innerHTML = `Vorschlag eingetragen (≈ ${fmtNum(sug.kcal)} kcal/Tag) – du kannst alles noch anpassen und dann speichern.`;
+        markDirty(dlg);
+      }
     };
     form.addEventListener('submit', (ev) => {
       ev.preventDefault();
-      const goals = {};
-      for (const { key } of S.GOAL_DEFS) {
-        const v = parseFloat(String(form['goal-' + key].value).replace(',', '.'));
-        goals[key] = { value: v > 0 ? v : null, period: form['period-' + key].value, mode: form['mode-' + key].value };
+      commit();
+      // erst anlegen/ändern, dann entfernen (es muss immer mindestens eine Person geben)
+      for (const p of drafts) {
+        const { id, isNew, weightLog, ...data } = p;
+        if (isNew) {
+          const created = S.addPerson(data.name);
+          S.updatePerson(created.id, data);
+        } else S.updatePerson(id, data);
       }
-      S.setProfile({ ...read(), goals });
+      for (const id of removed) S.removePerson(id);
+      dlg.dataset.dirty = '';
       dlg.close();
       toast('Profil gespeichert');
     });
-    renderBmi();
+    render();
     openDialog(dlg);
+  }
+
+  /* ================= Extras: Woche füllen, kopieren, leeren ================= */
+  function nextWeekStart(start = ui.viewStart) {
+    return S.isoDate(S.addDays(S.parseISO(start), 7));
+  }
+
+  function openFillDialog() {
+    const dlg = $('#fillDialog');
+    if (isReadOnly()) return toast('Diese Woche ist archiviert.');
+    const favCount = S.state.recipes.filter((r) => r.fav).length;
+    const hasGoals = !!(S.dailyGoal('kcal') || S.dailyGoal('protein'));
+    const multi = S.persons().length > 1;
+    const lastMeals = (loadPref('planfood:fillMeals', 'breakfast,lunch,dinner') || '').split(',');
+    const formView = () => `<form method="dialog" class="fill-form">
+      <header class="dialog-head"><div><h2>🎲 Woche automatisch füllen</h2>
+        <span class="muted">${weekLabel(ui.viewStart).kw} · nur freie Felder werden belegt</span></div>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body">
+        <div class="field"><span>Welche Mahlzeiten?</span>
+          <div class="check-chips">${S.MEALS.map(
+            (m) => `<label class="check-chip"><input type="checkbox" name="meal" value="${m.key}" ${lastMeals.includes(m.key) ? 'checked' : ''} /><span>${m.label}</span></label>`
+          ).join('')}</div>
+          <small class="muted">Frühstück nimmt Rezepte der Kategorie „Frühstück“, Mittag- und Abendessen „Hauptgericht“, Snack „Snack“.</small>
+        </div>
+        ${
+          S.state.tags.length
+            ? `<div class="field"><span>Nur Rezepte mit diesen Tags <small>(optional)</small></span>
+                <div class="check-chips">${S.state.tags
+                  .map((t) => `<label class="check-chip tagged" style="--t:${t.color}"><input type="checkbox" name="tag" value="${t.id}" /><span>${esc(t.name)}</span></label>`)
+                  .join('')}</div></div>`
+            : ''
+        }
+        <label class="switch-row"><input type="checkbox" name="fav" ${favCount ? '' : 'disabled'} />
+          <span>⭐ Nur Favoriten <small class="muted">(${favCount ? `${favCount} Rezepte` : 'noch keine – im Rezept auf ☆ tippen'})</small></span></label>
+        <label class="switch-row"><input type="checkbox" name="goals" ${hasGoals ? 'checked' : 'disabled'} />
+          <span>🎯 Ziele berücksichtigen <small class="muted">${
+            hasGoals
+              ? `(Energie und Eiweiß möglichst nah an die Tagesziele${multi ? ` von ${esc(S.activePerson().name)}` : ''})`
+              : '(erst im Profil Ziele festlegen)'
+          }</small></span></label>
+        <p class="muted small">Rezepte werden möglichst nicht wiederholt, länger nicht gekochte kommen eher dran.
+          Geplant wird ${multi ? `für alle Personen (${fmtNum(Math.round(S.householdPortions() * 2) / 2, 1)} Portionen)` : 'je 1 Portion'} – im Kalender mit −/+ änderbar.</p>
+        <p class="warn" id="fillMsg" hidden></p>
+      </div>
+      <footer class="dialog-foot"><button type="button" class="btn" data-close>Abbrechen</button>
+        <button class="btn btn-primary">🎲 Füllen</button></footer>
+    </form>`;
+
+    let opts = null;
+    let added = [];
+    const resultView = () => {
+      const week = currentWeek();
+      const set = new Set(added);
+      const rows = S.DAY_NAMES.map((d, i) => {
+        const items = S.entries(week).filter((e) => e.day === i && set.has(e.uid));
+        if (!items.length) return '';
+        return `<li><strong>${d.slice(0, 2)}</strong><span>${items
+          .map((e) => `${esc(S.MEALS.find((m) => m.key === e.meal).label)}: ${esc((S.getRecipe(e.recipeId, week) || {}).name || '')}`)
+          .join(' · ')}</span></li>`;
+      }).join('');
+      return `<div class="fill-result">
+        <header class="dialog-head"><div><h2>✓ ${added.length} ${added.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'} eingeplant</h2>
+          <span class="muted">Passt nicht? Neu würfeln oder rückgängig machen.</span></div>
+          <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+        <div class="dialog-body"><ul class="fill-list">${rows}</ul></div>
+        <footer class="dialog-foot">
+          <button type="button" class="btn" data-act="fill-undo">↩ Rückgängig</button>
+          <button type="button" class="btn" data-act="fill-again">🎲 Neu würfeln</button>
+          <button type="button" class="btn btn-primary" data-close>Fertig</button>
+        </footer></div>`;
+    };
+    const run = () => {
+      added = S.fillWeek(ui.viewStart, opts);
+      return added.length;
+    };
+    const showForm = () => {
+      dlg.innerHTML = formView();
+      $('form', dlg).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const f = ev.target;
+        const meals = $$('input[name=meal]:checked', f).map((i) => i.value);
+        const msg = $('#fillMsg', dlg);
+        if (!meals.length) {
+          msg.hidden = false;
+          msg.textContent = 'Bitte mindestens eine Mahlzeit auswählen.';
+          return;
+        }
+        savePref('planfood:fillMeals', meals.join(','));
+        opts = { meals, tagIds: $$('input[name=tag]:checked', f).map((i) => i.value), favoritesOnly: f.fav.checked, useGoals: f.goals.checked };
+        if (!run()) {
+          msg.hidden = false;
+          msg.textContent = 'Nichts eingeplant – entweder sind alle Felder schon belegt oder es gibt keine passenden Rezepte (Kategorie/Tags/Favoriten).';
+          return;
+        }
+        dlg.innerHTML = resultView();
+      });
+    };
+    dlg.onclick = (ev) => {
+      const act = ev.target.closest('[data-act]');
+      if (!act) return;
+      if (act.dataset.act === 'fill-undo') {
+        S.removeEntries(ui.viewStart, added);
+        toast('Rückgängig gemacht');
+        dlg.close();
+      }
+      if (act.dataset.act === 'fill-again') {
+        S.removeEntries(ui.viewStart, added);
+        run();
+        dlg.innerHTML = resultView();
+      }
+    };
+    showForm();
+    openDialog(dlg);
+  }
+
+  function copyToNextWeek() {
+    const from = currentWeek();
+    if (!from || !S.entries(from).length) return toast('Diese Woche ist noch leer.');
+    const target = nextWeekStart();
+    const tw = S.getWeek(target);
+    if (tw && tw.archived) return toast('Die nächste Woche ist archiviert.');
+    const existing = tw ? S.entries(tw).length : 0;
+    if (existing && !confirm(`In ${weekLabel(target).kw} sind schon ${existing} Mahlzeiten geplant. Trotzdem dazukopieren?`)) return;
+    const res = S.copyWeek(ui.viewStart, target);
+    ui.viewStart = target;
+    renderAll();
+    toast(`${res.copied} Mahlzeiten nach ${weekLabel(target).kw} kopiert`);
+  }
+
+  function clearCurrentWeek() {
+    const w = currentWeek();
+    if (isReadOnly()) return toast('Diese Woche ist archiviert.');
+    const n = w ? S.entries(w).length : 0;
+    if (!n) return toast('Diese Woche ist schon leer.');
+    if (!confirm(`Alle ${n} Mahlzeiten aus ${weekLabel(ui.viewStart).kw} entfernen?`)) return;
+    S.clearWeek(ui.viewStart);
+    toast('Woche geleert');
+  }
+
+  /* ================= Was kann ich kochen? ================= */
+  function openCookDialog() {
+    const dlg = $('#cookDialog');
+    let have = loadPref('planfood:cookHave', '');
+    dlg.innerHTML = `<div class="cook">
+      <header class="dialog-head"><div><h2>🍳 Was kann ich kochen?</h2>
+        <span class="muted">Zutaten eingeben, die du da hast – passende Rezepte erscheinen sofort</span></div>
+        <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+      <div class="dialog-body">
+        <label class="field"><span>Ich habe da … <small>(mit Komma trennen)</small></span>
+          <input name="have" value="${esc(have)}" placeholder="z. B. Tofu, Reis, Paprika" autocomplete="off" /></label>
+        <label class="switch-row"><input type="checkbox" name="pantry" checked />
+          <span>🧂 Vorratsschrank mitzählen <small class="muted">(${S.state.pantry.length} Zutaten – Salz, Öl …)</small></span></label>
+        <div id="cookList"></div>
+      </div>
+    </div>`;
+    fillIngredientDatalist();
+    const input = $('input[name=have]', dlg);
+    const render = () => {
+      have = input.value;
+      savePref('planfood:cookHave', have);
+      const names = have.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+      const list = $('#cookList', dlg);
+      if (!names.length) {
+        list.innerHTML = '<p class="muted pad">Tipp: Schau in den Kühlschrank und tipp ein, was weg muss. 🙂</p>';
+        return;
+      }
+      const res = S.rankByIngredients(names, { usePantry: $('input[name=pantry]', dlg).checked }).slice(0, 30);
+      list.innerHTML = res.length
+        ? `<ul class="cook-list">${res
+            .map(({ recipe: r, got, missing }) => {
+              const total = got.length + missing.length;
+              return `<li class="cook-item" style="--c:${r.color}">
+                <div class="cook-main">
+                  <strong>${r.fav ? '⭐ ' : ''}${esc(r.name)}</strong>
+                  <span class="cook-meter"><i style="width:${(got.length / total) * 100}%"></i></span>
+                  <small class="${missing.length ? 'muted' : 'ok-text'}">${
+                    missing.length ? `${got.length}/${total} da · fehlt: ${esc(missing.join(', '))}` : '✓ Alles da!'
+                  }</small>
+                </div>
+                <div class="cook-btns">
+                  <button type="button" class="btn btn-sm" data-cook-view="${r.id}">Ansehen</button>
+                  ${isReadOnly() ? '' : `<button type="button" class="btn btn-sm btn-primary" data-cook-plan="${r.id}">Einplanen …</button>`}
+                </div>
+              </li>`;
+            })
+            .join('')}</ul>`
+        : '<p class="muted pad">Kein Rezept enthält diese Zutaten.</p>';
+    };
+    input.addEventListener('input', render);
+    $('input[name=pantry]', dlg).addEventListener('change', render);
+    dlg.onclick = (ev) => {
+      const v = ev.target.closest('[data-cook-view]');
+      if (v) openDetail(v.dataset.cookView);
+      const p = ev.target.closest('[data-cook-plan]');
+      if (p) openPlanDialog(p.dataset.cookPlan);
+    };
+    render();
+    openDialog(dlg);
+    input.focus();
+  }
+
+  function fillIngredientDatalist() {
+    const dl = $('#ingredientNames');
+    if (dl) dl.innerHTML = S.knownIngredientNames().map((n) => `<option value="${esc(n)}"></option>`).join('');
+  }
+
+  /* ================= Vorratsschrank ================= */
+  const PANTRY_SUGGEST = ['Salz', 'Pfeffer', 'Olivenöl', 'Rapsöl', 'Zucker', 'Mehl', 'Essig', 'Sojasauce', 'Gemüsebrühe', 'Senf', 'Honig', 'Backpulver', 'Paprikapulver', 'Curry', 'Oregano', 'Zimt', 'Knoblauch', 'Zwiebel'];
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  function openPantryDialog() {
+    const dlg = $('#pantryDialog');
+    const render = () => {
+      const items = [...S.state.pantry].sort((a, b) => a.localeCompare(b, 'de'));
+      const sugg = PANTRY_SUGGEST.filter((n) => !S.isPantry(n));
+      dlg.innerHTML = `<div class="pantry">
+        <header class="dialog-head"><div><h2>🧂 Vorratsschrank</h2>
+          <span class="muted">Was du immer zu Hause hast, kommt nicht auf die Einkaufsliste</span></div>
+          <button type="button" class="icon-btn" data-close aria-label="Schließen">✕</button></header>
+        <div class="dialog-body">
+          <form class="add-item" id="pantryAdd">
+            <input name="item" list="ingredientNames" placeholder="Zutat hinzufügen (z. B. Salz)" aria-label="Zutat für den Vorrat" autocomplete="off" />
+            <button class="btn btn-sm">＋</button>
+          </form>
+          ${
+            items.length
+              ? `<div class="pantry-chips">${items
+                  .map((n) => `<span class="pantry-chip">${esc(cap(n))}<button type="button" data-unpantry="${esc(n)}" aria-label="${esc(cap(n))} entfernen">×</button></span>`)
+                  .join('')}</div>`
+              : '<p class="muted pad">Noch leer. Tipp unten auf die Vorschläge oder trag selbst etwas ein.</p>'
+          }
+          ${
+            sugg.length
+              ? `<h4 class="pantry-sub">Vorschläge</h4><div class="pantry-chips">${sugg
+                  .map((n) => `<button type="button" class="pantry-chip suggest" data-pantry="${esc(n)}">＋ ${esc(n)}</button>`)
+                  .join('')}</div>`
+              : ''
+          }
+          <p class="muted small">Zutaten aus dem Vorrat erscheinen in der Einkaufsliste grau unter „Im Vorrat“ und zählen für den grünen
+            Rahmen im Kalender als vorhanden. In der Einkaufsliste geht das auch über „⋯“ bei einer Zutat.</p>
+        </div>
+        <footer class="dialog-foot"><button type="button" class="btn btn-primary" data-close>Fertig</button></footer>
+      </div>`;
+      $('#pantryAdd', dlg).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const v = ev.target.item.value.trim();
+        if (!v) return;
+        S.setPantry(v, true);
+        render();
+        $('#pantryAdd input', dlg).focus();
+      });
+    };
+    dlg.onclick = (ev) => {
+      const add = ev.target.closest('[data-pantry]');
+      const del = ev.target.closest('[data-unpantry]');
+      if (add) S.setPantry(add.dataset.pantry, true);
+      else if (del) S.setPantry(del.dataset.unpantry, false);
+      else return;
+      render();
+    };
+    fillIngredientDatalist();
+    render();
+    openDialog(dlg);
+  }
+
+  /* ================= Drucken ================= */
+  function printView(kind) {
+    const area = $('#printArea');
+    const week = currentWeek();
+    const { kw, range } = weekLabel(ui.viewStart);
+    if (kind === 'plan') {
+      const start = S.parseISO(ui.viewStart);
+      let rows = '';
+      for (const meal of S.MEALS) {
+        rows += `<tr><th>${meal.label}</th>`;
+        for (let d = 0; d < 7; d++) {
+          const list = (week && week.slots[d] && week.slots[d][meal.key]) || [];
+          rows += `<td>${list
+            .map((e) => {
+              const r = S.getRecipe(e.recipeId, week);
+              return r ? `<div>${esc(r.name)} <small>(${fmtNum(e.servings, 1)} P.)</small></div>` : '';
+            })
+            .join('')}</td>`;
+        }
+        rows += '</tr>';
+      }
+      area.innerHTML = `<h1>Wochenplan ${kw}</h1><p>${range}</p>
+        <table class="print-plan"><thead><tr><th></th>${S.DAY_NAMES.map((d, i) => {
+          const date = S.addDays(start, i);
+          return `<th>${d}<br><small>${date.getDate()}.${date.getMonth() + 1}.</small></th>`;
+        }).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+    } else {
+      const items = S.shoppingItems(week).filter((i) => !i.checked);
+      if (!items.length) return toast('Nichts mehr offen auf der Einkaufsliste.');
+      const groups = groupByAisle(items);
+      area.innerHTML = `<h1>Einkaufsliste ${kw}</h1><p>${range}</p>
+        <div class="print-groups">${groups
+          .map(
+            ([sec, list]) => `<section><h2>${esc(sec)}</h2><ul>${list
+              .map((i) => `<li>☐ ${i.unit ? `<b>${fmtAmount(i.amount, i.unit)}</b> ` : ''}${esc(i.name)}</li>`)
+              .join('')}</ul></section>`
+          )
+          .join('')}</div>`;
+    }
+    document.body.dataset.print = kind;
+    const done = () => {
+      delete document.body.dataset.print;
+      area.innerHTML = '';
+      window.removeEventListener('afterprint', done);
+    };
+    window.addEventListener('afterprint', done);
+    window.print();
+  }
+
+  /** Einträge nach Supermarkt-Bereich gruppieren (Reihenfolge wie im Laden) */
+  function groupByAisle(items) {
+    const map = new Map(S.AISLE_NAMES.map((n) => [n, []]));
+    for (const i of items) (map.get(S.aisleOf(i.name)) || map.get('Sonstiges')).push(i);
+    return [...map].filter(([, list]) => list.length);
   }
 
   /* ================= Einstellungen ================= */
@@ -2200,9 +2709,48 @@
       renderAll();
     });
     $('#syncChip').addEventListener('click', () => openSettings({ focusSync: true }));
-    $('#profileBtn').addEventListener('click', openProfile);
+    $('#profileBtn').addEventListener('click', () => openProfile());
     $('#calendar').addEventListener('click', (ev) => {
       if (ev.target.closest('[data-act="open-profile"]')) openProfile();
+    });
+    // Personenwahl im Kalender: wessen Nährwerte/Ziele angezeigt werden
+    $('#calendar').addEventListener('change', (ev) => {
+      if (ev.target.matches('.person-switch')) S.setActivePerson(ev.target.value);
+    });
+
+    // „✨ Extras“-Menü
+    const extras = $('#extrasMenu');
+    const toggleExtras = (open) => {
+      extras.hidden = !open;
+      $('#extrasBtn').setAttribute('aria-expanded', open);
+    };
+    $('#extrasBtn').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      toggleExtras(extras.hidden);
+      if (!extras.hidden) extras.querySelector('button').focus();
+    });
+    extras.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-extra]');
+      if (!b) return;
+      toggleExtras(false);
+      ({
+        fill: openFillDialog,
+        copy: copyToNextWeek,
+        clear: clearCurrentWeek,
+        cook: openCookDialog,
+        pantry: openPantryDialog,
+        'print-plan': () => printView('plan'),
+        'print-list': () => printView('list'),
+      })[b.dataset.extra]();
+    });
+    extras.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        toggleExtras(false);
+        $('#extrasBtn').focus();
+      }
+    });
+    document.addEventListener('click', (ev) => {
+      if (!extras.hidden && !ev.target.closest('#extrasWrap')) toggleExtras(false);
     });
     // „＋ Rezept“-Menü: leer, aus Link/Text, aus Excel
     const menu = $('#newRecipeMenu');
@@ -2246,7 +2794,8 @@
       if (b) {
         const id = b.dataset.tag;
         ui.tagFilter.has(id) ? ui.tagFilter.delete(id) : ui.tagFilter.add(id);
-      } else if (ev.target.closest('[data-tag-reset]')) ui.tagFilter.clear();
+      } else if (ev.target.closest('[data-fav-filter]')) ui.favOnly = !ui.favOnly;
+      else if (ev.target.closest('[data-tag-reset]')) (ui.tagFilter.clear(), (ui.favOnly = false));
       else return;
       renderCards();
     });
@@ -2429,6 +2978,12 @@
     shop.addEventListener('change', (ev) => {
       const cb = ev.target.closest('input[type=checkbox][data-key]');
       if (cb) S.toggleItem(ui.viewStart, cb.dataset.key, cb.checked);
+      const sel = ev.target.closest('select[data-act="aisle"]');
+      if (sel) {
+        ui.shopMore = null;
+        S.setAisle(sel.dataset.name, sel.value);
+        toast(`${sel.dataset.name} → ${sel.value}`);
+      }
     });
     shop.addEventListener('click', async (ev) => {
       const act = ev.target.closest('[data-act]');
@@ -2443,14 +2998,36 @@
         case 'remove-item':
           S.removeItem(ui.viewStart, act.dataset.key);
           break;
+        case 'sort':
+          ui.shopSort = act.dataset.sort;
+          savePref('planfood:shopSort', ui.shopSort);
+          renderShopping();
+          break;
+        case 'more':
+          ui.shopMore = ui.shopMore === act.dataset.key ? null : act.dataset.key;
+          renderShopping();
+          break;
+        case 'pantry':
+          ui.shopMore = null;
+          S.setPantry(act.dataset.name, true);
+          toast(`🧂 ${act.dataset.name} ist jetzt im Vorratsschrank`);
+          break;
+        case 'unpantry':
+          S.setPantry(act.dataset.name, false);
+          break;
+        case 'print-list':
+          printView('list');
+          break;
         case 'copy-list': {
-          const w = currentWeek();
+          const open = S.shoppingItems(currentWeek()).filter((i) => !i.checked);
+          const line = (i) => `☐ ${i.unit ? fmtAmount(i.amount, i.unit) + ' ' : ''}${i.name}`;
           const text =
             `Einkaufsliste ${weekLabel(ui.viewStart).kw}\n` +
-            S.shoppingItems(w)
-              .filter((i) => !i.checked)
-              .map((i) => `☐ ${i.unit ? fmtAmount(i.amount, i.unit) + ' ' : ''}${i.name}`)
-              .join('\n');
+            (ui.shopSort === 'aisle'
+              ? groupByAisle(open)
+                  .map(([sec, list]) => `\n${sec}\n${list.map(line).join('\n')}`)
+                  .join('\n')
+              : open.map(line).join('\n'));
           try {
             await navigator.clipboard.writeText(text);
             toast('Offene Einträge kopiert');
@@ -2468,11 +3045,19 @@
       if (v) S.addManualItem(ui.viewStart, v);
     });
 
-    // Dialoge: Schließen-Buttons & Klick auf Hintergrund
+    // Dialoge schließen nur über ✕/Abbrechen (bzw. Speichern) – ein Klick daneben verwirft nichts mehr.
+    // Nur reine Ansichten (Rezept ansehen, Auswahl, Archiv) schließen auch per Klick auf den Hintergrund.
+    const LIGHT = ['detailDialog', 'pickerDialog', 'archiveDialog'];
     $$('dialog').forEach((dlg) => {
       dlg.addEventListener('click', (ev) => {
-        if (ev.target.closest('[data-close]') || ev.target === dlg) dlg.close();
+        if (ev.target.closest('[data-close]') || (ev.target === dlg && LIGHT.includes(dlg.id))) dlg.close();
       });
+      // Esc: bei ungespeicherten Eingaben erst nachfragen
+      dlg.addEventListener('input', () => markDirty(dlg));
+      dlg.addEventListener('cancel', (ev) => {
+        if (dlg.dataset.dirty && !confirm('Ohne Speichern schließen? Deine Eingaben gehen verloren.')) ev.preventDefault();
+      });
+      dlg.addEventListener('close', () => (dlg.dataset.dirty = ''));
     });
 
     // Tastatur: Pfeile wechseln die Woche (wenn kein Eingabefeld aktiv)

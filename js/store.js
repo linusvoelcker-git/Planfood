@@ -87,6 +87,7 @@ window.PF_STORE = (function () {
     state.meta ||= { updatedAt: 0 };
     migrateTags();
     migrateProfile();
+    migrateExtras();
     Object.values(state.weeks).forEach(migrateShopping);
     autoArchive();
   }
@@ -241,19 +242,66 @@ window.PF_STORE = (function () {
     { key: 'fiber', mode: 'min' },
     { key: 'sugar', mode: 'max' },
   ];
-  function migrateProfile() {
-    const p = (state.profile ||= {});
-    p.weightKg ??= null;
-    p.heightCm ??= null;
-    p.age ??= null;
-    p.sex ??= '';
-    p.activity ??= 1.55;
-    p.weightLog ||= [];
-    p.goals ||= {};
-    for (const g of GOAL_DEFS) p.goals[g.key] ||= { value: null, period: 'day', mode: g.mode };
+  /*
+   * Personen im Haushalt. Jede Person hat Körperdaten, Ziele und eine Portionsgröße
+   * (1 = normale Portion). Geplante Portionen eines Eintrags werden im Verhältnis der
+   * Portionsgrößen auf die Personen verteilt (bei einer Person: alles für sie).
+   */
+  function blankPerson(name) {
+    const p = { id: uid(), name, weightKg: null, heightCm: null, age: null, sex: '', activity: 1.55, portion: 1, weightLog: [], goals: {} };
+    for (const g of GOAL_DEFS) p.goals[g.key] = { value: null, period: 'day', mode: g.mode };
+    return p;
   }
-  function setProfile(changes) {
-    const p = state.profile;
+  function migrateProfile() {
+    if (!Array.isArray(state.persons) || !state.persons.length) {
+      // früheres Einzelprofil übernehmen
+      const old = state.profile || {};
+      state.persons = [{ ...blankPerson('Ich'), ...old, id: uid(), name: old.name || 'Ich' }];
+    }
+    delete state.profile;
+    for (const p of state.persons) {
+      p.weightKg ??= null;
+      p.heightCm ??= null;
+      p.age ??= null;
+      p.sex ??= '';
+      p.activity ??= 1.55;
+      p.portion ??= 1;
+      p.weightLog ||= [];
+      p.goals ||= {};
+      for (const g of GOAL_DEFS) p.goals[g.key] ||= { value: null, period: 'day', mode: g.mode };
+    }
+    if (!state.persons.some((p) => p.id === state.settings.activePerson)) state.settings.activePerson = state.persons[0].id;
+  }
+  function persons() {
+    return state.persons;
+  }
+  function getPerson(id) {
+    return state.persons.find((p) => p.id === id) || null;
+  }
+  /** Person, deren Ziele im Kalender angezeigt werden */
+  function activePerson() {
+    return getPerson(state.settings.activePerson) || state.persons[0];
+  }
+  function setActivePerson(id) {
+    if (!getPerson(id)) return;
+    state.settings.activePerson = id;
+    save();
+  }
+  function addPerson(name) {
+    const p = blankPerson(name || `Person ${state.persons.length + 1}`);
+    state.persons.push(p);
+    save();
+    return p;
+  }
+  function removePerson(id) {
+    if (state.persons.length < 2) return;
+    state.persons = state.persons.filter((p) => p.id !== id);
+    if (state.settings.activePerson === id) state.settings.activePerson = state.persons[0].id;
+    save();
+  }
+  function updatePerson(id, changes) {
+    const p = getPerson(id);
+    if (!p) return;
     const newWeight = changes.weightKg;
     Object.assign(p, changes);
     // Gewichtsverlauf: neuer Eintrag, wenn sich das Gewicht ändert (pro Tag höchstens einer)
@@ -265,7 +313,20 @@ window.PF_STORE = (function () {
     }
     save();
   }
-  function bmi(p = state.profile) {
+  /** kompatibel: Profil der aktiven Person ändern */
+  function setProfile(changes) {
+    updatePerson(activePerson().id, changes);
+  }
+  /** Summe der Portionsgrößen = Portionen, die eine gemeinsame Mahlzeit braucht */
+  function householdPortions() {
+    return state.persons.reduce((s, p) => s + (p.portion || 1), 0);
+  }
+  /** Anteil einer Person an jeder geplanten Mahlzeit */
+  function personShare(person = activePerson()) {
+    if (state.persons.length < 2) return 1;
+    return (person.portion || 1) / householdPortions();
+  }
+  function bmi(p = activePerson()) {
     if (!(p.weightKg > 0) || !(p.heightCm > 0)) return null;
     const v = p.weightKg / (p.heightCm / 100) ** 2;
     const cat =
@@ -273,13 +334,13 @@ window.PF_STORE = (function () {
     return { value: Math.round(v * 10) / 10, label: cat[0], level: cat[1] };
   }
   /** Tagesziel eines Nährwerts (Wochenziele werden auf 7 Tage verteilt). */
-  function dailyGoal(key) {
-    const g = state.profile.goals[key];
+  function dailyGoal(key, person = activePerson()) {
+    const g = person.goals[key];
     if (!g || !(g.value > 0)) return null;
     return { target: g.period === 'week' ? g.value / 7 : g.value, mode: g.mode };
   }
-  function weeklyGoal(key) {
-    const d = dailyGoal(key);
+  function weeklyGoal(key, person = activePerson()) {
+    const d = dailyGoal(key, person);
     return d ? { target: d.target * 7, mode: d.mode } : null;
   }
   /** true = Ziel erfüllt, false = nicht erfüllt */
@@ -290,7 +351,7 @@ window.PF_STORE = (function () {
     return Math.abs(v - goal.target) <= goal.target * 0.1;
   }
   /** Bedarf grob schätzen (Mifflin-St Jeor × Aktivität) und daraus Ziele vorschlagen. */
-  function suggestGoals(p = state.profile) {
+  function suggestGoals(p = activePerson()) {
     if (!(p.weightKg > 0 && p.heightCm > 0 && p.age > 0) || !p.sex) return null;
     const bmr = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age + (p.sex === 'm' ? 5 : -161);
     const kcal = Math.round((bmr * (p.activity || 1.55)) / 50) * 50;
@@ -404,7 +465,9 @@ window.PF_STORE = (function () {
     if (week.archived) return;
     const recipe = getRecipe(recipeId);
     if (!recipe) return;
-    slotList(week, day, meal).push({ uid: uid(), recipeId, servings: recipe.servings || 1 });
+    // Haushalt mit mehreren Personen: so viele Portionen wie Personen (nach Portionsgröße)
+    const servings = state.persons.length > 1 ? Math.round(householdPortions() * 2) / 2 : recipe.servings || 1;
+    slotList(week, day, meal).push({ uid: uid(), recipeId, servings });
     save();
   }
   function findEntry(week, entryUid) {
@@ -501,6 +564,11 @@ window.PF_STORE = (function () {
     const sh = week.shopping || { bought: {}, manual: [] };
     const rows = [];
     for (const need of computeNeeds(week)) {
+      // Vorratsschrank: nicht einkaufen, gilt als vorhanden
+      if (isPantry(need.name)) {
+        rows.push({ ...need, id: need.key + '#pantry', checked: true, pantry: true });
+        continue;
+      }
       const have = Math.min(sh.bought[need.key] || 0, need.amount);
       const open = roundAmount(need.amount - have, need.unit);
       if (have > 0) rows.push({ ...need, id: need.key + '#done', amount: have, checked: true });
@@ -557,6 +625,7 @@ window.PF_STORE = (function () {
     if (!week) return map;
     const mealIdx = Object.fromEntries(MEALS.map((m, i) => [m.key, i]));
     const remaining = { ...((week.shopping && week.shopping.bought) || {}) };
+    for (const n of computeNeeds(week)) if (isPantry(n.name)) remaining[n.key] = Infinity;
     const ordered = entries(week).sort((a, b) => a.day - b.day || mealIdx[a.meal] - mealIdx[b.meal]);
     for (const e of ordered) {
       const recipe = getRecipe(e.recipeId, week);
@@ -651,6 +720,179 @@ window.PF_STORE = (function () {
     return result;
   }
 
+  /* ---------- Vorratsschrank ---------- */
+  function migrateExtras() {
+    state.pantry ||= [];
+    state.aisles ||= {};
+  }
+  function isPantry(name) {
+    return (state.pantry || []).includes(N.norm(name));
+  }
+  function setPantry(name, on) {
+    const key = N.norm(name);
+    state.pantry = state.pantry.filter((n) => n !== key);
+    if (on) state.pantry.push(key);
+    save();
+  }
+
+  /* ---------- Supermarkt-Bereiche ---------- */
+  const AISLES = [
+    ['Obst & Gemüse', /apfel|äpfel|banane|beere|zitrone|limette|orange|mango|ananas|kiwi|birne|pfirsich|traube|melone|kirsch|tomate|gurke|paprika|zwiebel|knoblauch|karotte|möhre|kartoffel|brokkoli|blumenkohl|spinat|zucchini|aubergine|champignon|pilz|salat|rucola|kohl|lauch|porree|sellerie|ingwer|avocado|kürbis|spargel|radieschen|rote bete|frühlingszwiebel|schalotte|kräuter|petersilie|basilikum|koriander|minze|dill|schnittlauch|chili$|chilischote|jalapeño|mais$|(^| )erbsen|grüne bohnen/],
+    ['Kühlregal', /milch|joghurt|quark|käse|feta|mozzarella|parmesan|frischkäse|sahne|butter|^ei$|^eier|^ei |tofu|tempeh|seitan|hummus|skyr|kefir|schmand|creme|margarine|hafermilch|sojamilch|mandelmilch/],
+    ['Fleisch & Fisch', /hähnchen|huhn|pute|rind|hack|schwein|speck|schinken|wurst|steak|lachs|thunfisch|fisch|garnele|kabeljau|lamm/],
+    ['Brot & Backwaren', /brot|brötchen|toast|tortilla|wrap|bagel|baguette|croissant/],
+    ['Tiefkühl', /\(tk\)|tk-|tiefkühl|gefroren/],
+    ['Nudeln, Reis & Getreide', /nudel|spaghetti|pasta|penne|reis|haferflocken|hafer|müsli|granola|quinoa|couscous|bulgur|mehl|grieß|linsen|kichererbsen|bohnen|cornflakes/],
+    ['Konserven & Saucen', /dose|passiert|tomatenmark|gehackte tomaten|kokosmilch|brühe|sauce|soße|senf|ketchup|mayonnaise|pesto|essig|sojasauce|tahini|mus$|erdnussbutter|marmelade|honig|sirup|oliven$/],
+    ['Gewürze & Öle', /salz|pfeffer|gewürz|zimt|kurkuma|kreuzkümmel|paprikapulver|curry|oregano|thymian|rosmarin|muskat|vanille|backpulver|natron|hefe|öl$|olivenöl|rapsöl|kokosöl|sesamöl|zucker|kakao|chiliflocken|lorbeer/],
+    ['Nüsse & Snacks', /nuss|nüsse|mandel|cashew|pistazie|samen|kerne|sesam|chia|leinsamen|rosinen|datteln|schokolade|riegel|chips|proteinpulver/],
+    ['Getränke', /wasser|saft|kaffee|tee|wein|bier|limo|cola/],
+  ];
+  const AISLE_NAMES = [...AISLES.map(([n]) => n), 'Sonstiges'];
+  function aisleOf(name) {
+    const key = N.norm(name);
+    if (state.aisles && state.aisles[key]) return state.aisles[key];
+    // Tiefkühl und Konserven haben Vorrang („Spinat (TK)“, „Kokosmilch“, „Tomatenmark“)
+    const priority = [AISLES[4], AISLES[6], ...AISLES.filter((_, i) => i !== 4 && i !== 6)];
+    for (const [section, re] of priority) if (re.test(key)) return section;
+    return 'Sonstiges';
+  }
+  function setAisle(name, section) {
+    state.aisles[N.norm(name)] = section;
+    save();
+  }
+
+  /* ---------- Favoriten & zuletzt geplant ---------- */
+  function toggleFavorite(id) {
+    const r = state.recipes.find((x) => x.id === id);
+    if (!r) return;
+    r.fav = !r.fav;
+    save();
+  }
+  /** Datum (ISO), an dem das Rezept zuletzt im Plan stand (bis heute), sonst das nächste geplante. */
+  function lastPlanned(recipeId) {
+    const today = isoDate(new Date());
+    let past = null;
+    let next = null;
+    for (const w of Object.values(state.weeks)) {
+      for (const e of entries(w)) {
+        if (e.recipeId !== recipeId) continue;
+        const d = isoDate(addDays(parseISO(w.start), e.day));
+        if (d <= today) past = !past || d > past ? d : past;
+        else next = !next || d < next ? d : next;
+      }
+    }
+    return { past, next };
+  }
+
+  /* ---------- Woche: kopieren, leeren, automatisch füllen ---------- */
+  function clearWeek(start) {
+    const week = getWeek(start);
+    if (!week || week.archived) return 0;
+    const n = entries(week).length;
+    week.slots = {};
+    save();
+    return n;
+  }
+  function removeEntries(start, uids) {
+    const week = getWeek(start);
+    if (!week || week.archived) return;
+    const set = new Set(uids);
+    forEachSlot(week, (list, day, meal) => {
+      week.slots[day][meal] = list.filter((e) => !set.has(e.uid));
+    });
+    save();
+  }
+  const MEAL_CATEGORY = { breakfast: 'Frühstück', lunch: 'Hauptgericht', dinner: 'Hauptgericht', snack: 'Snack' };
+  /**
+   * Leere Felder der Woche mit passenden Rezepten füllen.
+   * opts: { meals: ['breakfast', …], tagIds: [], favoritesOnly, useGoals }
+   * Abwechslung: Rezepte möglichst nicht doppelt, lange nicht geplante bevorzugt.
+   * Mit useGoals wird je Tag so gewählt, dass Energie und Eiweiß möglichst nah ans Tagesziel kommen.
+   */
+  function fillWeek(start, opts = {}) {
+    const week = getWeek(start, true);
+    if (week.archived) return [];
+    const meals = opts.meals || MEALS.map((m) => m.key);
+    const pool = state.recipes.filter(
+      (r) => (!opts.favoritesOnly || r.fav) && (!opts.tagIds || !opts.tagIds.length || opts.tagIds.every((t) => (r.tags || []).includes(t)))
+    );
+    const usedCount = new Map();
+    entries(week).forEach((e) => usedCount.set(e.recipeId, (usedCount.get(e.recipeId) || 0) + 1));
+    const lastUsed = new Map(pool.map((r) => [r.id, lastPlanned(r.id).past || '0000']));
+    const person = activePerson();
+    const share = personShare(person);
+    const kcalGoal = opts.useGoals ? dailyGoal('kcal', person) : null;
+    const proteinGoal = opts.useGoals ? dailyGoal('protein', person) : null;
+    // so viele Portionen, wie der Haushalt isst (eine Person: 1 Portion)
+    const portions = Math.max(0.5, Math.round(householdPortions() * 2) / 2);
+    const added = [];
+    const perServing = new Map(pool.map((r) => [r.id, recipePerServing(r).values]));
+    for (let d = 0; d < 7; d++) {
+      const dayVals = { kcal: 0, protein: 0 };
+      // vorhandene Einträge des Tages einrechnen
+      for (const e of entries(week).filter((x) => x.day === d)) {
+        const r = getRecipe(e.recipeId, week);
+        if (!r) continue;
+        const v = recipePerServing(r).values;
+        const f = (e.servings || 1) * share;
+        dayVals.kcal += (v.kcal || 0) * f;
+        dayVals.protein += (v.protein || 0) * f;
+      }
+      const empty = meals.filter((m) => !((week.slots[d] && week.slots[d][m]) || []).length);
+      empty.forEach((meal, idx) => {
+        const cat = MEAL_CATEGORY[meal];
+        // nur passende Kategorie (kein Hauptgericht als Snack)
+        const candidates = pool.filter((r) => (r.category || 'Sonstiges') === cat);
+        if (!candidates.length) return;
+        const left = empty.length - idx; // noch zu füllende Felder an diesem Tag
+        const scored = candidates.map((r) => {
+          const servings = portions;
+          const v = perServing.get(r.id) || {};
+          const kcal = (v.kcal || 0) * servings * share;
+          const protein = (v.protein || 0) * servings * share;
+          let score = (usedCount.get(r.id) || 0) * 3; // Wiederholungen vermeiden
+          score += lastUsed.get(r.id) > isoDate(addDays(new Date(), -14)) ? 1 : 0; // kürzlich gekocht
+          if (kcalGoal) score += Math.abs(kcalGoal.target - dayVals.kcal - kcal * left) / kcalGoal.target;
+          if (proteinGoal) score += Math.max(0, proteinGoal.target - dayVals.protein - protein * left) / proteinGoal.target;
+          score += Math.random() * 0.6; // etwas Zufall
+          return { r, score, kcal, protein, servings };
+        });
+        scored.sort((a, b) => a.score - b.score);
+        const pick = scored[0];
+        const entry = { uid: uid(), recipeId: pick.r.id, servings: pick.servings };
+        slotList(week, d, meal).push(entry);
+        usedCount.set(pick.r.id, (usedCount.get(pick.r.id) || 0) + 1);
+        dayVals.kcal += pick.kcal;
+        dayVals.protein += pick.protein;
+        added.push(entry.uid);
+      });
+    }
+    save();
+    return added;
+  }
+
+  /* ---------- „Was kann ich kochen?“ ---------- */
+  /** Rezepte nach vorhandenen Zutaten sortieren (am wenigsten fehlend zuerst). */
+  function rankByIngredients(haveNames, { usePantry = true } = {}) {
+    const have = haveNames.map((n) => N.norm(n)).filter(Boolean);
+    // ganze Wörter vergleichen („ei“ soll nicht in „reis“ passen), längere Begriffe auch als Teil („hafer“ ↔ „haferflocken“)
+    const wordMatch = (a, b) => a === b || a.split(' ').includes(b) || (b.length >= 4 && a.includes(b));
+    const typed = (ingName) => {
+      const n = N.norm(ingName);
+      return have.some((h) => wordMatch(n, h) || wordMatch(h, n));
+    };
+    return state.recipes
+      .map((r) => {
+        const hits = r.ingredients.filter((i) => typed(i.name)).length;
+        const got = r.ingredients.filter((i) => typed(i.name) || (usePantry && isPantry(i.name))).map((i) => i.name);
+        const missing = r.ingredients.filter((i) => !got.includes(i.name)).map((i) => i.name);
+        return { recipe: r, got, missing, hits };
+      })
+      .filter((x) => x.hits) // mindestens eine der eingegebenen Zutaten
+      .sort((a, b) => a.missing.length - b.missing.length || b.hits - a.hits);
+  }
+
   /* ---------- Archiv ---------- */
   function snapshotRecipes(week) {
     const snap = {};
@@ -721,14 +963,15 @@ window.PF_STORE = (function () {
     return { copied, skipped };
   }
 
-  /** Nährwerte pro Tag einer Woche (Index 0–6) */
-  function dayTotals(week) {
+  /** Nährwerte pro Tag einer Woche (Index 0–6) – für eine Person (ihr Anteil an jeder Mahlzeit). */
+  function dayTotals(week, person = activePerson()) {
     const days = Array.from({ length: 7 }, () => N.emptyTotals());
+    const share = personShare(person);
     for (const e of entries(week)) {
       const recipe = getRecipe(e.recipeId, week);
       if (!recipe) continue;
       const t = recipeTotals(recipe);
-      N.mergeTotals(days[e.day], t, (e.servings || 1) / (recipe.servings || 1));
+      N.mergeTotals(days[e.day], t, ((e.servings || 1) / (recipe.servings || 1)) * share);
     }
     return days;
   }
@@ -819,6 +1062,15 @@ window.PF_STORE = (function () {
     deleteRecipes,
     GOAL_DEFS,
     setProfile,
+    persons,
+    getPerson,
+    activePerson,
+    setActivePerson,
+    addPerson,
+    removePerson,
+    updatePerson,
+    personShare,
+    householdPortions,
     bmi,
     dailyGoal,
     weeklyGoal,
@@ -847,6 +1099,17 @@ window.PF_STORE = (function () {
     deleteWeek,
     archivedWeeks,
     copyWeek,
+    isPantry,
+    setPantry,
+    AISLE_NAMES,
+    aisleOf,
+    setAisle,
+    toggleFavorite,
+    lastPlanned,
+    clearWeek,
+    removeEntries,
+    fillWeek,
+    rankByIngredients,
     importData,
     getTag,
     addTag,

@@ -35,6 +35,21 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   (Spalten *Gericht, Zutat, Menge, Einheit*, optional *Zubereitung, Portionen, Kategorie, Tag, Mahlzeit*, Nährwert-Spalten)
   und formt daraus einzelne Rezepte. Ein Blatt mit *Zutat + Nährwerten pro 100 g* wird als Nährwertquelle übernommen,
   *Tag/Mahlzeit* auf Wunsch als Wochenplan. Vorlage zum Herunterladen im Import-Dialog.
+- **Mehrere Personen** (👤 → „＋ Person“): jede Person hat eigene Körperdaten, Ziele und eine **Portionsgröße**
+  (½ bis 1½). Neue Mahlzeiten werden automatisch für alle geplant (Summe der Portionsgrößen). Im Kalender wählt man
+  unter „Tagessumme“, wessen Nährwerte und Ziele angezeigt werden – gezählt wird ihr Anteil an jeder Mahlzeit.
+- **✨ Extras** (oben):
+  - **🎲 Woche automatisch füllen**: freie Felder mit passenden Rezepten belegen (Frühstück → Kategorie Frühstück,
+    Mittag/Abend → Hauptgericht, Snack → Snack), optional nur bestimmte Tags oder Favoriten und **passend zu den Zielen**
+    (Energie/Eiweiß). Ergebnis mit „Rückgängig“ und „Neu würfeln“.
+  - **🍳 Was kann ich kochen?** – Zutaten eintippen, die da sind → Rezepte sortiert nach „fehlt am wenigsten“.
+  - **🧂 Vorratsschrank** – was immer da ist (Salz, Öl …), kommt nicht auf die Einkaufsliste und zählt als vorhanden.
+  - **📋 Woche in nächste kopieren**, **🧹 Woche leeren**, **🖨 Wochenplan / Einkaufsliste drucken**.
+- **Einkaufsliste nach Supermarkt-Bereichen** (Obst & Gemüse, Kühlregal, …) oder A–Z. Über „⋯“ bei einer Zutat
+  lässt sich der Bereich ändern oder die Zutat in den Vorratsschrank legen.
+- **⭐ Favoriten**: im Rezept auf ☆ tippen; Filter „★ Favoriten“ über der Kartei, Favoriten stehen in der Auswahl oben.
+  Im Rezept steht außerdem, wann es **zuletzt** und **nächstes Mal** geplant ist.
+- **Dialoge** schließen nur über ✕, Abbrechen oder Speichern – ein Klick daneben verwirft keine Eingaben mehr.
 - **Profil** (👤): Gewicht, Größe, Alter, Geschlecht, Aktivität → **BMI** mit Skala und Gewichtsverlauf.
   **Ziele** für Energie, Eiweiß, Kohlenhydrate, Fett, Ballaststoffe, Zucker – pro Tag oder pro Woche, als
   *mindestens*, *höchstens* oder *ungefähr*; optional als Vorschlag aus den Körperdaten berechnet.

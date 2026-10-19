@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#2a7d6b" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/styles.css?v=2026101002" />
+  <link rel="stylesheet" href="css/styles.css?v=2026101901" />
 </head>
 <body>
   <header class="topbar">
@@ -33,6 +33,20 @@
 
     <div class="actions">
       <button class="btn btn-primary" id="generateListBtn">🛒 Einkaufsliste</button>
+      <div class="menu-wrap" id="extrasWrap">
+        <button class="btn" id="extrasBtn" aria-haspopup="menu" aria-expanded="false">✨ Extras ▾</button>
+        <div class="menu" id="extrasMenu" role="menu" hidden>
+          <button role="menuitem" data-extra="fill">🎲 Woche automatisch füllen <small>freie Felder mit passenden Rezepten</small></button>
+          <button role="menuitem" data-extra="cook">🍳 Was kann ich kochen? <small>Rezepte zu den Zutaten, die da sind</small></button>
+          <button role="menuitem" data-extra="pantry">🧂 Vorratsschrank <small>immer da – nicht einkaufen</small></button>
+          <hr />
+          <button role="menuitem" data-extra="copy">📋 Woche in nächste kopieren</button>
+          <button role="menuitem" data-extra="clear">🧹 Woche leeren</button>
+          <hr />
+          <button role="menuitem" data-extra="print-plan">🖨 Wochenplan drucken</button>
+          <button role="menuitem" data-extra="print-list">🖨 Einkaufsliste drucken</button>
+        </div>
+      </div>
       <button class="btn" id="profileBtn">👤 Profil</button>
       <button class="btn" id="archiveBtn">🗂 Archiv</button>
       <button class="icon-btn sync-chip" id="syncChip" title="Geräte-Sync" aria-label="Geräte-Sync">☁</button>
@@ -188,16 +202,28 @@
   <!-- Einplanen-Auswahl (Touch-Geräte) -->
   <dialog id="planDialog" class="dialog"></dialog>
 
+  <!-- Woche automatisch füllen -->
+  <dialog id="fillDialog" class="dialog"></dialog>
+
+  <!-- Was kann ich kochen? -->
+  <dialog id="cookDialog" class="dialog dialog-wide"></dialog>
+
+  <!-- Vorratsschrank -->
+  <dialog id="pantryDialog" class="dialog"></dialog>
+
+  <!-- Druckansicht (nur beim Drucken sichtbar) -->
+  <div id="printArea" class="print-area" aria-hidden="true"></div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/foods.js?v=2026101002"></script>
-  <script src="js/nutrition.js?v=2026101002"></script>
-  <script src="js/store.js?v=2026101002"></script>
-  <script src="js/sync.js?v=2026101002"></script>
-  <script src="js/translate.js?v=2026101002"></script>
-  <script src="js/textrecipe.js?v=2026101002"></script>
-  <script src="js/scanner.js?v=2026101002"></script>
-  <script src="js/importer.js?v=2026101002"></script>
-  <script src="js/app.js?v=2026101002"></script>
+  <script src="js/foods.js?v=2026101901"></script>
+  <script src="js/nutrition.js?v=2026101901"></script>
+  <script src="js/store.js?v=2026101901"></script>
+  <script src="js/sync.js?v=2026101901"></script>
+  <script src="js/translate.js?v=2026101901"></script>
+  <script src="js/textrecipe.js?v=2026101901"></script>
+  <script src="js/scanner.js?v=2026101901"></script>
+  <script src="js/importer.js?v=2026101901"></script>
+  <script src="js/app.js?v=2026101901"></script>
 </body>
 </html>
