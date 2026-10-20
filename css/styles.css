@@ -3385,3 +3385,42 @@ button.tag.active {
   gap: 0.35rem;
   margin-left: auto;
 }
+
+/* ============ Einkaufsliste: erledigte Einträge ============ */
+.done-box {
+  margin-top: 0.75rem;
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 0.1rem 0.75rem;
+}
+.done-box summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  font-weight: 600;
+  color: var(--ok);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.done-box summary span {
+  background: var(--ok-soft);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  font-size: 0.78rem;
+}
+.done-box summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.done-box[open] summary::after {
+  transform: rotate(180deg);
+}
+.done-box summary::-webkit-details-marker {
+  display: none;
+}
+.done-box .shop-list {
+  margin-bottom: 0.4rem;
+}

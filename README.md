@@ -26,7 +26,8 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   **Englische Zutaten** („eggs“, „rolled oats“, „olive oil“ …) werden automatisch übersetzt – über ein eingebautes
   Wörterbuch (`js/translate.js`), auch beim Import aus Link/Text und Excel.
 - **Einkaufsliste läuft automatisch mit**: jedes Rezept im Kalender landet sofort mit seinen Zutaten in der Liste; gleiche Zutat + Einheit wird addiert,
-  skaliert nach Portionen. Einträge zum Abhaken, eigene Einträge möglich, Kopieren als Text.
+  skaliert nach Portionen. Einträge zum Abhaken – Abgehaktes rutscht in den zugeklappten Bereich „✓ Erledigt“, oben steht nur,
+  was noch fehlt. Eigene Einträge möglich, Kopieren als Text.
 - **Gleiche Zutat, andere Schreibweise**: Die Einkaufsliste fasst automatisch zusammen, was gleich ist –
   Synonyme aus der Nährwerttabelle („Knoblauchzehen“ → „Knoblauch“) und Einzahl/Mehrzahl („Zwiebeln“ → „Zwiebel“).
   Kommt eine Zutat in verschiedenen Einheiten vor (Stück, g, EL …), wird mit dem Gewicht pro Stück bzw. Löffel

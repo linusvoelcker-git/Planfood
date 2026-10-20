@@ -612,16 +612,24 @@
       </li>`;
     };
     const mode = ui.shopSort;
+    // Abgehaktes wandert in einen eigenen, zugeklappten Bereich – oben bleibt nur, was noch fehlt
+    const openItems = items.filter((i) => !i.checked);
+    const doneItems = items.filter((i) => i.checked);
     const listHTML =
       mode === 'aisle'
-        ? groupByAisle(items)
-            .map(([sec, list]) => {
-              const left = list.filter((i) => !i.checked).length;
-              return `<li class="shop-group${left ? '' : ' done'}"><h4>${esc(sec)} <span>${left ? left : '✓'}</span></h4>
-                <ul>${list.sort(byName).map(itemHTML).join('')}</ul></li>`;
-            })
+        ? groupByAisle(openItems)
+            .map(
+              ([sec, list]) => `<li class="shop-group"><h4>${esc(sec)} <span>${list.length}</span></h4>
+                <ul>${list.sort(byName).map(itemHTML).join('')}</ul></li>`
+            )
             .join('')
-        : [...items].sort(byName).map(itemHTML).join('');
+        : [...openItems].sort(byName).map(itemHTML).join('');
+    const doneBox = doneItems.length
+      ? `<details class="done-box" ${ui.doneOpen ? 'open' : ''}>
+          <summary>✓ Erledigt <span>${doneItems.length}</span></summary>
+          <ul class="shop-list">${[...doneItems].sort(byName).map(itemHTML).join('')}</ul>
+        </details>`
+      : '';
 
     panel.innerHTML = `<div class="shop-head">
         <div>
@@ -639,7 +647,8 @@
       <div class="progress"><span style="width:${pct}%"></span></div>
       ${pct === 100 ? '<div class="all-done">🎉 Alles da – guten Appetit!</div>' : ''}
       ${ro ? '' : similarHints(items)}
-      <ul class="shop-list${mode === 'aisle' ? ' grouped' : ''}">${listHTML}</ul>
+      ${openItems.length ? `<ul class="shop-list${mode === 'aisle' ? ' grouped' : ''}">${listHTML}</ul>` : ''}
+      ${doneBox}
       ${addForm}
       ${pantryBox}
       ${
@@ -3256,6 +3265,14 @@
 
     // Einkaufsliste
     const shop = $('#shoppingPanel');
+    // „Erledigt“ auf- bzw. zugeklappt lassen, auch wenn die Liste neu gezeichnet wird
+    shop.addEventListener(
+      'toggle',
+      (ev) => {
+        if (ev.target.matches('.done-box')) ui.doneOpen = ev.target.open;
+      },
+      true
+    );
     shop.addEventListener('change', (ev) => {
       const cb = ev.target.closest('input[type=checkbox][data-key]');
       if (cb) S.toggleItem(ui.viewStart, cb.dataset.key, cb.checked);
