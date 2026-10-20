@@ -563,9 +563,17 @@
 
     const pct = Math.round((done / items.length) * 100);
     const sub = (i) => {
-      if (i.extraTo) return `<span class="sitem-sub extra">＋ zusätzlich (${fmtAmount(i.extraTo, i.unit)} schon abgehakt)</span>`;
-      return i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : '';
+      const merged =
+        i.merged && (i.merged.length || i.converted)
+          ? `<span class="sitem-sub merged" title="In der Einkaufsliste zusammengefasst">🔗 ${
+              i.merged.length ? `auch „${esc(i.merged.join('“, „'))}“` : ''
+            }${i.merged.length && i.converted ? ' · ' : ''}${i.converted ? 'Einheiten umgerechnet' : ''}</span>`
+          : '';
+      if (i.extraTo) return `<span class="sitem-sub extra">＋ zusätzlich (${fmtAmount(i.extraTo, i.unit)} schon abgehakt)</span>${merged}`;
+      return (i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : '') + merged;
     };
+    // andere Zutaten der Liste – zum Zusammenfassen
+    const otherNames = [...new Set(items.filter((x) => !x.manual).map((x) => x.name))].sort((a, b) => a.localeCompare(b, 'de'));
     const byName = (a, b) => a.checked - b.checked || a.name.localeCompare(b.name, 'de');
     const itemHTML = (i) => {
       const more = ui.shopMore === i.id;
@@ -587,6 +595,17 @@
                   (n) => `<option ${S.aisleOf(i.name) === n ? 'selected' : ''}>${esc(n)}</option>`
                 ).join('')}</select></label>
                 ${i.manual ? '' : `<button class="btn btn-sm" data-act="pantry" data-name="${esc(i.name)}">🧂 Hab ich immer da</button>`}
+                ${
+                  i.manual
+                    ? ''
+                    : `<label>🔗 Gleiche Zutat wie <select data-act="merge" data-name="${esc(i.name)}"><option value="">– auswählen –</option>${otherNames
+                        .filter((n) => n !== i.name)
+                        .map((n) => `<option>${esc(n)}</option>`)
+                        .join('')}</select></label>`
+                }
+                ${(i.merged || [])
+                  .map((m) => `<button class="btn btn-sm" data-act="split" data-name="${esc(m)}" data-into="${esc(i.name)}">✂ „${esc(m)}“ wieder einzeln</button>`)
+                  .join('')}
               </div>`
             : ''
         }
@@ -619,6 +638,7 @@
       </div>
       <div class="progress"><span style="width:${pct}%"></span></div>
       ${pct === 100 ? '<div class="all-done">🎉 Alles da – guten Appetit!</div>' : ''}
+      ${ro ? '' : similarHints(items)}
       <ul class="shop-list${mode === 'aisle' ? ' grouped' : ''}">${listHTML}</ul>
       ${addForm}
       ${pantryBox}
@@ -632,6 +652,57 @@
           <button class="btn btn-sm" data-act="print-list">🖨 Drucken</button>
         </div>`
       }`;
+  }
+
+  /** Ähnliche Namen finden („Knoblauch“ / „Knoblauch C“, „Zwiebel“ / „Zwiebeln“) */
+  function levenshtein(a, b) {
+    const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = d[0];
+      d[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const tmp = d[j];
+        d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = tmp;
+      }
+    }
+    return d[b.length];
+  }
+  function looksSame(a, b) {
+    const na = N.norm(a);
+    const nb = N.norm(b);
+    if (na === nb) return false;
+    const wa = na.split(' ');
+    const wb = nb.split(' ');
+    if (wa.every((w) => wb.includes(w)) || wb.every((w) => wa.includes(w))) return true;
+    const len = Math.min(na.length, nb.length);
+    return len >= 5 && levenshtein(na, nb) <= (len >= 8 ? 2 : 1);
+  }
+  /** Hinweise über der Einkaufsliste: Zusammenfassen-Vorschläge und fehlendes Stückgewicht */
+  function similarHints(items) {
+    const list = items.filter((i) => !i.manual && !i.pantry);
+    const names = [...new Set(list.map((i) => i.name))];
+    const hints = [];
+    for (let x = 0; x < names.length && hints.length < 3; x++) {
+      for (let y = x + 1; y < names.length && hints.length < 3; y++) {
+        const [a, b] = [names[x], names[y]];
+        if (!looksSame(a, b) || S.isIgnoredSimilar(a, b)) continue;
+        // den längeren Namen in den kürzeren übernehmen („Knoblauch C“ → „Knoblauch“)
+        const [from, into] = a.length >= b.length ? [a, b] : [b, a];
+        hints.push(`<div class="shop-hint">💡 Gleiche Zutat? <b>${esc(from)}</b> und <b>${esc(into)}</b>
+          <span class="shop-hint-btns"><button class="btn btn-sm btn-primary" data-act="sugg-merge" data-from="${esc(from)}" data-into="${esc(into)}">Zusammenfassen</button>
+          <button class="btn btn-sm" data-act="sugg-ignore" data-from="${esc(from)}" data-into="${esc(into)}">Nein</button></span></div>`);
+      }
+    }
+    // gleiche Zutat in Stück und g/ml, aber ohne Stückgewicht → kann nicht zusammengerechnet werden
+    const units = new Map();
+    for (const i of list) units.set(i.name, new Set([...(units.get(i.name) || []), i.unit]));
+    for (const [name, set] of units) {
+      if (hints.length >= 4 || !set.has('Stück') || set.size < 2) continue;
+      hints.push(`<div class="shop-hint">⚖ <b>${esc(name)}</b> steht in ${[...set].join(' und ')} – mit dem Gewicht pro Stück wird es zusammengerechnet.
+        <span class="shop-hint-btns"><button class="btn btn-sm" data-act="sugg-weight" data-name="${esc(name)}">Gewicht pro Stück eintragen</button></span></div>`);
+    }
+    return hints.join('');
   }
 
   /* ================= Rezept für ein Feld auswählen ================= */
@@ -783,7 +854,7 @@
           }
           ${
             st
-              ? `<span class="pill ${st.ok ? 'ok' : 'missing'}">${st.ok ? 'Alle Zutaten da' : `${st.missing.length} Zutat(en) fehlen`}</span>`
+              ? `<span class="pill ${st.ok ? 'ok' : 'missing'}">${st.ok ? 'Alle Zutaten da' : `${st.total - st.have} Zutat(en) fehlen`}</span>`
               : '<span class="pill">Noch keine Einkaufsliste</span>'
           }
         </div>`
@@ -2674,6 +2745,10 @@
           <p class="muted small">Farbe antippen zum Ändern, Name direkt bearbeiten. Löschen entfernt den Tag auch aus allen Rezepten.</p>
           <div class="tag-manager" id="tagManager"></div>
         </div>
+        <div class="field"><span>🔗 Zusammengefasste Zutaten</span>
+          <p class="muted small">Verschiedene Schreibweisen, die in der Einkaufsliste als eine Zutat gezählt werden. Neue Zuordnungen über „⋯“ bei einer Zutat in der Einkaufsliste.</p>
+          <div id="aliasList"></div>
+        </div>
         <div class="field"><span>🛟 Sicherungen auf diesem Gerät</span>
           <p class="muted small">Bevor Daten ersetzt werden (Sync, Import, Zurücksetzen), legt Planfood automatisch eine Sicherung an. Die letzten 5 bleiben erhalten.</p>
           <div id="backupList"></div>
@@ -2794,6 +2869,21 @@
       $('[data-tm="new"]', dlg).focus();
     });
     renderTagManager();
+    const renderAliases = () => {
+      const list = Object.entries(S.state.aliases).filter(([, to]) => to !== '!');
+      $('#aliasList', dlg).innerHTML = list.length
+        ? `<div class="pantry-chips">${list
+            .map(([from, to]) => `<span class="pantry-chip">${esc(from)} → <b>${esc(to)}</b><button type="button" data-unalias="${esc(from)}" aria-label="Trennen">×</button></span>`)
+            .join('')}</div>`
+        : '<p class="muted small">Noch keine eigenen Zuordnungen.</p>';
+    };
+    $('#aliasList', dlg).addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-unalias]');
+      if (!b) return;
+      S.splitIngredient(b.dataset.unalias);
+      renderAliases();
+    });
+    renderAliases();
     $('[data-act="import"]', dlg).addEventListener('change', async (ev) => {
       const file = ev.target.files[0];
       if (!file) return;
@@ -3169,6 +3259,12 @@
     shop.addEventListener('change', (ev) => {
       const cb = ev.target.closest('input[type=checkbox][data-key]');
       if (cb) S.toggleItem(ui.viewStart, cb.dataset.key, cb.checked);
+      const merge = ev.target.closest('select[data-act="merge"]');
+      if (merge && merge.value) {
+        ui.shopMore = null;
+        S.mergeIngredients(merge.dataset.name, merge.value);
+        toast(`🔗 „${merge.dataset.name}“ zählt jetzt als „${merge.value}“`);
+      }
       const sel = ev.target.closest('select[data-act="aisle"]');
       if (sel) {
         ui.shopMore = null;
@@ -3208,6 +3304,22 @@
           break;
         case 'print-list':
           printView('list');
+          break;
+        case 'sugg-merge':
+          S.mergeIngredients(act.dataset.from, act.dataset.into);
+          toast(`🔗 „${act.dataset.from}“ zählt jetzt als „${act.dataset.into}“`);
+          break;
+        case 'sugg-ignore':
+          S.ignoreSimilar(act.dataset.from, act.dataset.into);
+          break;
+        case 'sugg-weight':
+          openLookup(act.dataset.name, () => renderAll(), 'Stück');
+          break;
+        case 'split':
+          ui.shopMore = null;
+          S.splitIngredient(act.dataset.name);
+          S.ignoreSimilar(act.dataset.name, act.dataset.into);
+          toast(`„${act.dataset.name}“ steht wieder einzeln`);
           break;
         case 'copy-list': {
           const open = S.shoppingItems(currentWeek()).filter((i) => !i.checked);

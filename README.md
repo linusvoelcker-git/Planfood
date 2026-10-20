@@ -27,6 +27,12 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   Wörterbuch (`js/translate.js`), auch beim Import aus Link/Text und Excel.
 - **Einkaufsliste läuft automatisch mit**: jedes Rezept im Kalender landet sofort mit seinen Zutaten in der Liste; gleiche Zutat + Einheit wird addiert,
   skaliert nach Portionen. Einträge zum Abhaken, eigene Einträge möglich, Kopieren als Text.
+- **Gleiche Zutat, andere Schreibweise**: Die Einkaufsliste fasst automatisch zusammen, was gleich ist –
+  Synonyme aus der Nährwerttabelle („Knoblauchzehen“ → „Knoblauch“) und Einzahl/Mehrzahl („Zwiebeln“ → „Zwiebel“).
+  Kommt eine Zutat in verschiedenen Einheiten vor (Stück, g, EL …), wird mit dem Gewicht pro Stück bzw. Löffel
+  in eine Einheit umgerechnet. Ähnliche Namen („Knoblauch C“) erscheinen als Vorschlag zum Zusammenfassen;
+  über „⋯“ lässt sich jede Zutat von Hand zuordnen („Gleiche Zutat wie …“) oder wieder trennen.
+  Übersicht und Aufheben unter ⚙︎ → *Zusammengefasste Zutaten*. Die Rezepte selbst bleiben unverändert.
 - **Live-Sync mit dem Kalender**: Rezepte bekommen einen **grünen** Rahmen, wenn alle Zutaten abgehakt sind,
   sonst einen **roten** (inkl. „3/5“-Zähler und Tooltip mit den fehlenden Zutaten).
   Kommt später mehr von einer schon abgehakten Zutat dazu, erscheint die zusätzliche Menge als neuer, offener Eintrag.

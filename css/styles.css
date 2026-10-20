@@ -3361,3 +3361,24 @@ button.tag.active {
     padding-left: 0.3rem;
   }
 }
+
+/* ============ Zutaten zusammenfassen ============ */
+.sitem-sub.merged {
+  color: var(--accent);
+}
+.shop-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.shop-hint-btns {
+  display: flex;
+  gap: 0.35rem;
+  margin-left: auto;
+}

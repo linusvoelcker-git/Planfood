@@ -96,7 +96,9 @@ window.PF_STORE = (function () {
    * Speichern. Eigene Änderungen (local) bekommen einen neuen Zeitstempel und
    * werden an den Geräte-Sync gemeldet; vom Sync geholte Daten nicht.
    */
+  let rev = 0; // Änderungszähler (für Zwischenspeicher wie den Rezept-Status)
   function save(notify = true, { local = true } = {}) {
+    rev++;
     if (notify && local) state.meta.updatedAt = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -509,24 +511,131 @@ window.PF_STORE = (function () {
   const normUnit = (amount, unit) => (unit === 'l' ? [amount * 1000, 'ml'] : [amount, unit]);
   const itemKey = (name, unit) => N.norm(name) + '|' + (unit === 'l' ? 'ml' : unit);
 
-  /** Benötigte Mengen aller geplanten Rezepte einer Woche. */
-  function computeNeeds(week) {
-    const map = new Map();
+  /* ---------- Gleiche Zutat, andere Schreibweise ---------- */
+  // state.aliases: { 'knoblauch c': 'Knoblauch' } (manuell zusammengefasst) oder '!' (nie automatisch zusammenfassen)
+  let foodIndex = null;
+  function foodNameIndex() {
+    if (!foodIndex) {
+      foodIndex = new Map();
+      for (const f of window.PF_FOODS || []) for (const n of [f.name, ...f.aliases]) if (!foodIndex.has(N.norm(n))) foodIndex.set(N.norm(n), f.name);
+    }
+    return foodIndex;
+  }
+  /** automatische Zuordnung: Synonyme der Nährwerttabelle und Einzahl/Mehrzahl („Zwiebeln“ → „Zwiebel“) */
+  function autoCanonical(name) {
+    const key = N.norm(name);
+    const idx = foodNameIndex();
+    if (idx.has(key)) return idx.get(key);
+    const variants = [key.replace(/n$/, ''), key.replace(/en$/, ''), key.replace(/e$/, ''), key.replace(/s$/, ''), key + 'n', key + 'e'];
+    for (const v of variants) if (v !== key && v.length > 2 && idx.has(v)) return idx.get(v);
+    return null;
+  }
+  /** Name, unter dem eine Zutat in der Einkaufsliste geführt wird */
+  function canonicalName(name) {
+    let cur = String(name || '').trim();
+    const seen = new Set();
+    for (let step = 0; step < 5; step++) {
+      const key = N.norm(cur);
+      if (seen.has(key)) break;
+      seen.add(key);
+      const alias = state.aliases[key];
+      if (alias === '!') break;
+      const next = alias || autoCanonical(cur);
+      if (!next || N.norm(next) === key) {
+        // gleiche Schreibweise wie in der Tabelle übernehmen („tofu“ → „Tofu“)
+        if (next) cur = next;
+        break;
+      }
+      cur = next;
+    }
+    return cur;
+  }
+  /** Zutat „from“ in der Einkaufsliste mit „into“ zusammenfassen */
+  function mergeIngredients(from, into) {
+    const target = canonicalName(into);
+    if (N.norm(from) === N.norm(target)) return;
+    state.aliases[N.norm(from)] = target;
+    save();
+  }
+  /** Zusammenfassung aufheben: die Zutat steht wieder einzeln in der Liste */
+  function splitIngredient(name) {
+    const key = N.norm(name);
+    delete state.aliases[key];
+    const auto = autoCanonical(name);
+    if (auto && N.norm(auto) !== key) state.aliases[key] = '!';
+    save();
+  }
+  /** „Nicht zusammenfassen“ für einen Vorschlag merken */
+  function ignoreSimilar(a, b) {
+    const pair = [N.norm(a), N.norm(b)].sort().join('|');
+    if (!state.similarIgnore.includes(pair)) state.similarIgnore.push(pair);
+    save();
+  }
+  function isIgnoredSimilar(a, b) {
+    return state.similarIgnore.includes([N.norm(a), N.norm(b)].sort().join('|'));
+  }
+
+  /**
+   * Alle Zutaten der geplanten Rezepte (skaliert), mit Einkaufslisten-Namen und vereinheitlichter Einheit.
+   * Kommt dieselbe Zutat in verschiedenen Einheiten vor (z. B. Knoblauch in Stück und g), wird – wenn
+   * das Gewicht bekannt ist – alles in die Einheit mit dem größten Anteil umgerechnet.
+   */
+  function weekUses(week) {
+    const uses = [];
     for (const e of entries(week)) {
       const recipe = getRecipe(e.recipeId, week);
       if (!recipe) continue;
       const scale = (e.servings || recipe.servings || 1) / (recipe.servings || 1);
       for (const ing of recipe.ingredients) {
-        const key = itemKey(ing.name, ing.unit);
-        const [amount, unit] = normUnit(ing.amount, ing.unit);
-        if (!map.has(key)) map.set(key, { key, name: ing.name.trim(), unit, amount: 0, recipes: [], parts: new Map() });
-        const item = map.get(key);
-        item.amount += amount * scale;
-        // je Rezept merken, in welchen Unterkategorien die Zutat vorkommt (z. B. „Reis“ und „Soße“)
-        if (!item.parts.has(recipe.name)) item.parts.set(recipe.name, []);
-        const parts = item.parts.get(recipe.name);
-        if (ing.group && !parts.includes(ing.group)) parts.push(ing.group);
+        const [amount, unit] = normUnit(ing.amount * scale, ing.unit);
+        uses.push({ e, recipe, ing, canon: canonicalName(ing.name), amount, unit });
       }
+    }
+    const groups = new Map();
+    for (const u of uses) {
+      const k = N.norm(u.canon);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(u);
+    }
+    for (const list of groups.values()) {
+      if (new Set(list.map((u) => u.unit)).size < 2) continue;
+      const base = ingredientInfo(list[0].canon) || N.autoDetect(list[0].canon);
+      const infoOf = (u) => (base && (u.unit !== 'Stück' || base.gramsPerPiece) ? base : ingredientInfo(u.ing.name) || N.autoDetect(u.ing.name));
+      for (const u of list) u.grams = N.gramsOf(u.amount, u.unit, infoOf(u));
+      const conv = list.filter((u) => u.grams != null);
+      const share = {};
+      for (const u of conv) share[u.unit] = (share[u.unit] || 0) + u.grams;
+      if (Object.keys(share).length < 2) continue;
+      let target = Object.keys(share).sort((a, b) => share[b] - share[a])[0];
+      // Löffel nur als Ziel, wenn sonst nichts Abwiegbares dabei ist
+      if ((target === 'EL' || target === 'TL') && (share.g || share.ml)) target = (share.g || 0) >= (share.ml || 0) ? 'g' : 'ml';
+      const per = target === 'Stück' ? infoOf(conv.find((u) => u.unit === 'Stück')).gramsPerPiece : N.UNIT_GRAMS[target];
+      for (const u of conv) {
+        if (u.unit === target) continue;
+        u.from = u.unit;
+        u.amount = u.grams / per;
+        u.unit = target;
+      }
+    }
+    for (const u of uses) u.key = itemKey(u.canon, u.unit);
+    return uses;
+  }
+
+  /** Benötigte Mengen aller geplanten Rezepte einer Woche. */
+  function computeNeeds(week) {
+    const map = new Map();
+    for (const u of weekUses(week)) {
+      if (!map.has(u.key)) map.set(u.key, { key: u.key, name: u.canon, unit: u.unit, amount: 0, recipes: [], parts: new Map(), merged: [], converted: false });
+      const item = map.get(u.key);
+      item.amount += u.amount;
+      // je Rezept merken, in welchen Unterkategorien die Zutat vorkommt (z. B. „Reis“ und „Soße“)
+      if (!item.parts.has(u.recipe.name)) item.parts.set(u.recipe.name, []);
+      const parts = item.parts.get(u.recipe.name);
+      if (u.ing.group && !parts.includes(u.ing.group)) parts.push(u.ing.group);
+      // zusammengefasste Schreibweisen merken („Knoblauchzehen“ → „Knoblauch“)
+      const orig = u.ing.name.trim();
+      if (N.norm(orig) !== N.norm(u.canon) && !item.merged.some((m) => N.norm(m) === N.norm(orig))) item.merged.push(orig);
+      if (u.from) item.converted = true;
     }
     for (const item of map.values()) {
       item.amount = roundAmount(item.amount, item.unit);
@@ -572,7 +681,7 @@ window.PF_STORE = (function () {
     const rows = [];
     for (const need of computeNeeds(week)) {
       // Vorratsschrank: nicht einkaufen, gilt als vorhanden
-      if (isPantry(need.name)) {
+      if (inPantry(need)) {
         rows.push({ ...need, id: need.key + '#pantry', checked: true, pantry: true });
         continue;
       }
@@ -627,35 +736,45 @@ window.PF_STORE = (function () {
    * Reihenfolge (Tag, Mahlzeit) auf die Rezepte verteilt. Ein Rezept ist grün,
    * wenn alle seine Zutaten vollständig gedeckt sind.
    */
+  const statusCache = { key: null, state: null, week: null, map: null };
   function statusMap(week) {
     const map = new Map();
     if (!week) return map;
+    const cacheKey = rev + '|' + week.start;
+    if (statusCache.key === cacheKey && statusCache.state === state && statusCache.week === week) return statusCache.map;
+    Object.assign(statusCache, { key: cacheKey, state, week, map });
     const mealIdx = Object.fromEntries(MEALS.map((m, i) => [m.key, i]));
     const remaining = { ...((week.shopping && week.shopping.bought) || {}) };
-    for (const n of computeNeeds(week)) if (isPantry(n.name)) remaining[n.key] = Infinity;
+    for (const n of computeNeeds(week)) if (inPantry(n)) remaining[n.key] = Infinity;
+    const byEntry = new Map();
+    for (const u of weekUses(week)) {
+      if (!byEntry.has(u.e.uid)) byEntry.set(u.e.uid, []);
+      byEntry.get(u.e.uid).push(u);
+    }
     const ordered = entries(week).sort((a, b) => a.day - b.day || mealIdx[a.meal] - mealIdx[b.meal]);
     for (const e of ordered) {
-      const recipe = getRecipe(e.recipeId, week);
-      if (!recipe) continue;
-      const scale = (e.servings || recipe.servings || 1) / (recipe.servings || 1);
+      if (!byEntry.has(e.uid)) continue;
       const needs = new Map();
-      for (const ing of recipe.ingredients) {
-        const key = itemKey(ing.name, ing.unit);
-        if (!needs.has(key)) needs.set(key, { name: ing.name, amount: 0 });
-        needs.get(key).amount += normUnit(ing.amount, ing.unit)[0] * scale;
+      for (const u of byEntry.get(e.uid)) {
+        if (!needs.has(u.key)) needs.set(u.key, { names: [], amount: 0 });
+        const n = needs.get(u.key);
+        n.amount += u.amount;
+        if (!n.names.includes(u.ing.name)) n.names.push(u.ing.name);
       }
       const missing = [];
+      let missed = 0;
       for (const [key, n] of needs) {
         const avail = remaining[key] || 0;
         // kleine Toleranz für Rundungen in der Liste
         if (avail >= n.amount - 0.51) remaining[key] = Math.max(0, avail - n.amount);
         else {
-          missing.push(n.name);
+          missed++;
+          missing.push(...n.names);
           remaining[key] = 0;
         }
       }
       const total = needs.size;
-      map.set(e.uid, { ok: missing.length === 0, have: total - missing.length, total, missing });
+      map.set(e.uid, { ok: missed === 0, have: total - missed, total, missing });
     }
     return map;
   }
@@ -731,6 +850,12 @@ window.PF_STORE = (function () {
   function migrateExtras() {
     state.pantry ||= [];
     state.aisles ||= {};
+    state.aliases ||= {};
+    state.similarIgnore ||= [];
+  }
+  /** Eintrag der Einkaufsliste im Vorrat? (auch über eine zusammengefasste Schreibweise) */
+  function inPantry(need) {
+    return isPantry(need.name) || (need.merged || []).some(isPantry);
   }
   function isPantry(name) {
     return (state.pantry || []).includes(N.norm(name));
@@ -1108,6 +1233,11 @@ window.PF_STORE = (function () {
     copyWeek,
     isPantry,
     setPantry,
+    canonicalName,
+    mergeIngredients,
+    splitIngredient,
+    ignoreSimilar,
+    isIgnoredSimilar,
     AISLE_NAMES,
     aisleOf,
     setAisle,
