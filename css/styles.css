@@ -3257,32 +3257,47 @@ button.tag.active {
   gap: 0.4rem;
   flex-wrap: wrap;
 }
-#ingTable.grouped .ing-row {
+#ingTable .ing-row {
   grid-template-columns: 1.3rem minmax(0, 1fr) 90px 82px 112px 1.8rem;
 }
 .ing-row.in-group {
   padding-left: 0.6rem;
   border-left: 3px solid var(--accent-soft);
 }
-.ing-move {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
-.ing-move button {
+.ing-grip {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 0.6rem;
-  padding: 0.1rem 0;
-  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 0.3rem 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  border-radius: 6px;
 }
-.ing-move button:hover:not(:disabled) {
+.ing-grip:hover,
+.ing-grip:focus-visible {
   color: var(--accent);
+  background: var(--surface-2);
 }
-.ing-move button:disabled {
-  opacity: 0.25;
-  cursor: default;
+#ingTable {
+  position: relative;
+}
+#ingTable.dragging,
+#ingTable.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+#ingTable .drag-moving {
+  position: relative;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+}
+#ingTable.dragging > [data-i]:not(.drag-moving) {
+  transition: transform 0.18s ease;
 }
 .ing-group {
   display: flex;
@@ -3331,14 +3346,14 @@ button.tag.active {
   padding-top: 0;
 }
 @media (max-width: 720px) {
-  #ingTable.grouped .ing-row {
+  #ingTable .ing-row {
     grid-template-columns: 1.1rem minmax(0, 1fr) 56px 66px 1.8rem;
   }
-  #ingTable.grouped .ing-row .ing-status {
+  #ingTable .ing-row .ing-status {
     grid-row: 2;
     grid-column: 2 / -1;
   }
-  #ingTable.grouped .ing-row > .icon-btn {
+  #ingTable .ing-row > .icon-btn {
     grid-row: 1;
     grid-column: -2 / -1;
   }

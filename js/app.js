@@ -1026,21 +1026,15 @@
         if (ing.heading != null) {
           inGroup = true;
           return `<div class="ing-group" data-i="${i}">
+            <button type="button" class="ing-grip" aria-label="Unterkategorie mit allen Zutaten verschieben: ziehen oder Pfeiltasten" title="Ziehen: ganze Unterkategorie verschieben">⠿</button>
             <input class="ing-group-name" data-f="heading" placeholder="Name der Unterkategorie, z. B. Soße" value="${esc(ing.heading)}" aria-label="Unterkategorie" />
             <button type="button" class="btn btn-ghost btn-sm" data-act="ing-add-here" title="Zutat zu dieser Unterkategorie hinzufügen">＋ Zutat</button>
             <button type="button" class="icon-btn small" data-act="ing-remove" aria-label="Unterkategorie entfernen" title="Unterkategorie entfernen (Zutaten bleiben)">✕</button>
           </div>`;
         }
         const st = ingStatus(ing);
-        const hasHeadings = items.some((x) => x.heading != null);
         return `<div class="ing-row${inGroup ? ' in-group' : ''}" data-i="${i}">
-          ${
-            hasHeadings
-              ? `<span class="ing-move"><button type="button" data-act="ing-up" aria-label="Nach oben" title="Nach oben (auch in andere Unterkategorie)" ${i ? '' : 'disabled'}>▲</button><button type="button" data-act="ing-down" aria-label="Nach unten" title="Nach unten" ${
-                  i < items.length - 1 ? '' : 'disabled'
-                }>▼</button></span>`
-              : ''
-          }
+          <button type="button" class="ing-grip" aria-label="Verschieben: ziehen oder Pfeiltasten" title="Ziehen zum Verschieben">⠿</button>
           <input class="ing-name" list="ingredientNames" placeholder="Zutat" value="${esc(ing.name)}" data-f="name" aria-label="Zutat" />
           <input class="ing-amount" type="number" min="0" step="any" placeholder="Menge" value="${esc(ing.amount)}" data-f="amount" aria-label="Menge" />
           <select data-f="unit" aria-label="Einheit">
@@ -1139,14 +1133,6 @@
     const row = btn.closest('.ing-row, .ing-group');
     const i = row ? Number(row.dataset.i) : -1;
     const items = editor.recipe.ingredients;
-    if (btn.dataset.act === 'ing-up' || btn.dataset.act === 'ing-down') {
-      const j = btn.dataset.act === 'ing-up' ? i - 1 : i + 1;
-      if (j < 0 || j >= items.length) return;
-      [items[i], items[j]] = [items[j], items[i]];
-      renderIngTable();
-      $(`#ingTable [data-i="${j}"] [data-act="${btn.dataset.act}"]`)?.focus();
-      return;
-    }
     if (btn.dataset.act === 'ing-add-here') {
       // ans Ende dieser Unterkategorie (vor die nächste Überschrift)
       let k = i + 1;
@@ -1178,6 +1164,120 @@
     if (tag && !editor.recipe.tags.includes(tag.id)) editor.recipe.tags.push(tag.id);
     renderTagPicker();
     $('#tagPicker .tag-new').focus();
+  });
+
+  /* ----- Zutaten & Unterkategorien verschieben (Ziehen mit Maus/Finger oder Pfeiltasten am Griff ⠿) ----- */
+  /** Bereich [i, end) eines Eintrags: eine Zutat oder eine Unterkategorie samt ihren Zutaten */
+  function ingBlock(i) {
+    const items = editor.recipe.ingredients;
+    let end = i + 1;
+    if (items[i].heading != null) while (end < items.length && items[end].heading == null) end++;
+    return end;
+  }
+  /** Block [i, end) vor Position target (Index in der alten Liste) einfügen; gibt den neuen Startindex zurück */
+  function moveIngBlock(i, end, target) {
+    if (target >= i && target <= end) return i;
+    const items = editor.recipe.ingredients;
+    const block = items.splice(i, end - i);
+    const k = target > i ? target - block.length : target;
+    items.splice(k, 0, ...block);
+    renderIngTable();
+    return k;
+  }
+  /** erlaubte Einfügestellen: Zutaten überall, Unterkategorien nur vor einer anderen Überschrift oder ans Ende */
+  function ingDropTargets(i, end) {
+    const items = editor.recipe.ingredients;
+    const isGroup = items[i].heading != null;
+    const out = [];
+    for (let k = 0; k <= items.length; k++) {
+      if (k > i && k < end) continue;
+      if (isGroup && k < items.length && items[k].heading == null) continue;
+      out.push(k);
+    }
+    return out;
+  }
+
+  $('#ingTable').addEventListener('keydown', (ev) => {
+    const grip = ev.target.closest('.ing-grip');
+    if (!grip || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
+    ev.preventDefault();
+    const i = Number(grip.closest('[data-i]').dataset.i);
+    const end = ingBlock(i);
+    const targets = ingDropTargets(i, end);
+    const target = ev.key === 'ArrowUp' ? [...targets].reverse().find((k) => k < i) : targets.find((k) => k > end);
+    if (target == null) return;
+    const k = moveIngBlock(i, end, target);
+    $(`#ingTable [data-i="${k}"] .ing-grip`)?.focus();
+  });
+
+  $('#ingTable').addEventListener('pointerdown', (ev) => {
+    const grip = ev.target.closest('.ing-grip');
+    if (!grip || ev.button > 0) return;
+    ev.preventDefault();
+    const table = $('#ingTable');
+    const scroller = table.closest('.dialog-body');
+    const i = Number(grip.closest('[data-i]').dataset.i);
+    const end = ingBlock(i);
+    const isGroup = editor.recipe.ingredients[i].heading != null;
+    const rows = $$('#ingTable > [data-i]');
+    const moving = rows.slice(i, end);
+    const targets = ingDropTargets(i, end);
+    const gapY = (k) => (k >= rows.length ? rows[rows.length - 1].offsetTop + rows[rows.length - 1].offsetHeight + 3 : rows[k].offsetTop - 3);
+    const startY = ev.clientY;
+    const startScroll = scroller.scrollTop;
+    // Höhe des gezogenen Blocks inkl. Abstand – so weit rücken die anderen Zeilen zur Seite
+    const last = rows[end - 1];
+    const blockH = last.offsetTop + last.offsetHeight - rows[i].offsetTop + (parseFloat(getComputedStyle(table).rowGap) || 6);
+    table.classList.add('dragging');
+    moving.forEach((r) => r.classList.add('drag-moving'));
+    let target = i;
+    let lastY = ev.clientY;
+    const update = () => {
+      const dy = lastY - startY + (scroller.scrollTop - startScroll);
+      moving.forEach((r) => (r.style.transform = `translateY(${dy}px)`));
+      // Bezugspunkt: Oberkante einer Unterkategorie bzw. Mitte einer Zutat
+      const ref = rows[i].offsetTop + dy + (isGroup ? 0 : rows[i].offsetHeight / 2);
+      target = targets.reduce((best, k) => (Math.abs(gapY(k) - ref) < Math.abs(gapY(best) - ref) ? k : best), targets[0]);
+      // die übrigen Zeilen machen Platz
+      rows.forEach((r, k) => {
+        if (k >= i && k < end) return;
+        const sh = target < i && k >= target && k < i ? blockH : target > end && k >= end && k < target ? -blockH : 0;
+        r.style.transform = sh ? `translateY(${sh}px)` : '';
+      });
+    };
+    // am Rand des Fensters automatisch weiterscrollen
+    const timer = setInterval(() => {
+      const r = scroller.getBoundingClientRect();
+      const step = lastY < r.top + 50 ? -12 : lastY > r.bottom - 50 ? 12 : 0;
+      if (step) {
+        scroller.scrollTop += step;
+        update();
+      }
+    }, 16);
+    const move = (e) => {
+      lastY = e.clientY;
+      update();
+    };
+    const finish = (e) => {
+      clearInterval(timer);
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', finish);
+      grip.removeEventListener('pointercancel', finish);
+      table.classList.remove('dragging');
+      rows.forEach((r) => {
+        r.classList.remove('drag-moving');
+        r.style.transform = '';
+      });
+      if (e.type === 'pointerup' && target !== i && target !== end) {
+        moveIngBlock(i, end, target);
+        markDirty($('#editorDialog'));
+      }
+    };
+    grip.setPointerCapture(ev.pointerId);
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', finish);
+    grip.addEventListener('pointercancel', finish);
+    update();
   });
 
   $('#addGroupBtn').addEventListener('click', () => {
