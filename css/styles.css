@@ -1549,6 +1549,9 @@ button.tag.active {
   padding: 0;
 }
 .sitem {
+  /* hält die unsichtbare Checkbox in der Zeile – sonst liegt sie außerhalb der scrollbaren Liste
+     und der Browser springt beim Abhaken dorthin */
+  position: relative;
   display: flex;
   align-items: center;
   border-bottom: 1px dashed var(--line);
