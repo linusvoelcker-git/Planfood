@@ -65,6 +65,15 @@ window.PF_TEXTRECIPE = (function () {
       .replace(/\s+/g, ' ')
       .trim();
   const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  /** „Für die Sauce:“ / „For the dressing:“ → „Sauce“ / „Dressing“ */
+  function groupName(line) {
+    const n = line
+      .replace(/[:：]\s*$/, '')
+      .replace(/^[^\p{L}\d]+/u, '')
+      .replace(/^(für|fuer|for)\s+(die|den|das|the)?\s*/i, '')
+      .trim();
+    return capitalize(n.slice(0, 30));
+  }
 
   function platformOf(url) {
     if (!url) return null;
@@ -198,6 +207,7 @@ window.PF_TEXTRECIPE = (function () {
     const steps = [];
     const skipped = [];
     let mode = null; // 'ing' | 'steps' | null
+    let group = ''; // aktuelle Unterkategorie („Soße“, „Topping“ …)
     let name = opts.title ? stripEmoji(opts.title) : '';
     let servings = null;
 
@@ -228,12 +238,16 @@ window.PF_TEXTRECIPE = (function () {
       if (mode !== 'steps') {
         const ing = parseIngredient(line);
         if (ing) {
+          if (group) ing.group = group;
           ingredients.push(ing);
           continue;
         }
       }
-      // Zwischenüberschrift wie „Für die Sauce:“
-      if (/:$/.test(plain) && plain.length < 40) continue;
+      // Zwischenüberschrift wie „Für die Sauce:“ → Unterkategorie der folgenden Zutaten
+      if (/:$/.test(plain) && plain.length < 40) {
+        if (mode === 'ing' || ingredients.length) group = groupName(plain);
+        continue;
+      }
 
       if (!name && plain.length >= 3 && plain.length <= 90) {
         name = plain.split(/\s[|•·]\s/)[0].replace(/[:!]+$/, '').trim();
@@ -263,7 +277,8 @@ window.PF_TEXTRECIPE = (function () {
       if (ing.from && !translated.some((t) => t.from === ing.from)) translated.push({ from: ing.from, to: ing.name });
       if (ing.approx) approx = true;
       const clean = { name: ing.name, amount: ing.amount, unit: ing.unit };
-      const same = merged.find((m) => m.name.toLowerCase() === clean.name.toLowerCase() && m.unit === clean.unit);
+      if (ing.group) clean.group = ing.group;
+      const same = merged.find((m) => m.name.toLowerCase() === clean.name.toLowerCase() && m.unit === clean.unit && m.group === clean.group);
       if (same) same.amount = Math.round((same.amount + clean.amount) * 10) / 10;
       else merged.push(clean);
     }

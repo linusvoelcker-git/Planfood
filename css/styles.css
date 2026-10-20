@@ -3250,3 +3250,99 @@ button.tag.active {
     margin: 1.2cm;
   }
 }
+
+/* ============ Zutaten in Unterkategorien ============ */
+.ing-buttons {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+#ingTable.grouped .ing-row {
+  grid-template-columns: 1.3rem minmax(0, 1fr) 90px 82px 112px 1.8rem;
+}
+.ing-row.in-group {
+  padding-left: 0.6rem;
+  border-left: 3px solid var(--accent-soft);
+}
+.ing-move {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.ing-move button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.6rem;
+  padding: 0.1rem 0;
+  cursor: pointer;
+}
+.ing-move button:hover:not(:disabled) {
+  color: var(--accent);
+}
+.ing-move button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.ing-group {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.7rem 0 0.15rem;
+}
+.ing-group:first-child {
+  margin-top: 0;
+}
+.ing-group-name {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--accent-soft);
+  padding: 0.35rem 0.1rem;
+}
+.ing-group-name::placeholder {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--muted);
+}
+.ing-group-name:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+.detail-ings .ing-head {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent-soft);
+  padding: 0.6rem 0 0.15rem;
+}
+.detail-ings .ing-head:first-child {
+  padding-top: 0;
+}
+@media (max-width: 720px) {
+  #ingTable.grouped .ing-row {
+    grid-template-columns: 1.1rem minmax(0, 1fr) 56px 66px 1.8rem;
+  }
+  #ingTable.grouped .ing-row .ing-status {
+    grid-row: 2;
+    grid-column: 2 / -1;
+  }
+  #ingTable.grouped .ing-row > .icon-btn {
+    grid-row: 1;
+    grid-column: -2 / -1;
+  }
+  .ing-row.in-group {
+    padding-left: 0.3rem;
+  }
+}

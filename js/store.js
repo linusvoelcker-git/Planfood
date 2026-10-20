@@ -519,13 +519,20 @@ window.PF_STORE = (function () {
       for (const ing of recipe.ingredients) {
         const key = itemKey(ing.name, ing.unit);
         const [amount, unit] = normUnit(ing.amount, ing.unit);
-        if (!map.has(key)) map.set(key, { key, name: ing.name.trim(), unit, amount: 0, recipes: [] });
+        if (!map.has(key)) map.set(key, { key, name: ing.name.trim(), unit, amount: 0, recipes: [], parts: new Map() });
         const item = map.get(key);
         item.amount += amount * scale;
-        if (!item.recipes.includes(recipe.name)) item.recipes.push(recipe.name);
+        // je Rezept merken, in welchen Unterkategorien die Zutat vorkommt (z. B. „Reis“ und „Soße“)
+        if (!item.parts.has(recipe.name)) item.parts.set(recipe.name, []);
+        const parts = item.parts.get(recipe.name);
+        if (ing.group && !parts.includes(ing.group)) parts.push(ing.group);
       }
     }
-    for (const item of map.values()) item.amount = roundAmount(item.amount, item.unit);
+    for (const item of map.values()) {
+      item.amount = roundAmount(item.amount, item.unit);
+      item.recipes = [...item.parts].map(([name, parts]) => (parts.length ? `${name} (${parts.join(' + ')})` : name));
+      delete item.parts;
+    }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }
   function roundAmount(v, unit) {

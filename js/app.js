@@ -86,6 +86,18 @@
     return `E ${g('protein')} g · KH ${g('carbs')} g · F ${g('fat')} g`;
   }
 
+  /** Zutaten nach Unterkategorie (z. B. „Reis“, „Soße“) gruppieren – Reihenfolge wie im Rezept */
+  function groupIngredients(ings) {
+    const map = new Map();
+    for (const ing of ings) {
+      const g = ing.group || '';
+      if (!map.has(g)) map.set(g, []);
+      map.get(g).push(ing);
+    }
+    // Zutaten ohne Unterkategorie zuerst
+    return [...map].sort((a, b) => (a[0] ? 1 : 0) - (b[0] ? 1 : 0));
+  }
+
   function tagsOf(recipe) {
     return (recipe.tags || []).map(S.getTag).filter(Boolean);
   }
@@ -741,8 +753,8 @@
           }${when.next ? `📅 Nächstes Mal: ${fmtDate(when.next)}` : ''}</span>`
         : '<span class="detail-when">Noch nie geplant</span>';
 
-    const ingRows = recipe.ingredients
-      .map((ing) => {
+    const ingRows = groupIngredients(recipe.ingredients)
+      .map(([group, list]) => (group ? `<li class="ing-head">${esc(group)}</li>` : '') + list.map((ing) => {
         const info = S.ingredientInfo(ing.name);
         const hasNutri = info && N.gramsOf(1, ing.unit, info) != null;
         const have = st ? !st.missing.includes(ing.name) : null;
@@ -754,7 +766,7 @@
             title="${hasNutri ? 'Nährwerte vorhanden (' + esc(info.source || '') + ') – bearbeiten' : 'Nährwerte fehlen – jetzt ergänzen'}">
             ${hasNutri ? '●' : '＋ Nährwerte'}</button>
         </li>`;
-      })
+      }).join(''))
       .join('');
 
     const micros = N.NUTRIENTS.filter((d) => !d.macro && per.values[d.key] != null)
@@ -950,6 +962,13 @@
           tags: [],
         };
     editor.recipe.tags ||= [];
+    // Unterkategorien als Überschriften-Zeilen zwischen die Zutaten setzen
+    const rows = [];
+    for (const [group, list] of groupIngredients(editor.recipe.ingredients)) {
+      if (group) rows.push({ heading: group });
+      rows.push(...list.map(({ group: _g, ...ing }) => ing));
+    }
+    editor.recipe.ingredients = rows.length ? rows : [{ name: '', amount: '', unit: 'g' }];
     $('#editorTitle').textContent = editor.isNew ? 'Neues Rezept' : 'Rezept bearbeiten';
     form.name.value = editor.recipe.name;
     form.category.innerHTML = S.CATEGORIES.map((c) => `<option ${c === editor.recipe.category ? 'selected' : ''}>${c}</option>`).join('');
@@ -999,10 +1018,29 @@
   }
 
   function renderIngTable() {
-    $('#ingTable').innerHTML = editor.recipe.ingredients
+    let inGroup = false;
+    const items = editor.recipe.ingredients;
+    $('#ingTable').classList.toggle('grouped', items.some((x) => x.heading != null));
+    $('#ingTable').innerHTML = items
       .map((ing, i) => {
+        if (ing.heading != null) {
+          inGroup = true;
+          return `<div class="ing-group" data-i="${i}">
+            <input class="ing-group-name" data-f="heading" placeholder="Name der Unterkategorie, z. B. Soße" value="${esc(ing.heading)}" aria-label="Unterkategorie" />
+            <button type="button" class="btn btn-ghost btn-sm" data-act="ing-add-here" title="Zutat zu dieser Unterkategorie hinzufügen">＋ Zutat</button>
+            <button type="button" class="icon-btn small" data-act="ing-remove" aria-label="Unterkategorie entfernen" title="Unterkategorie entfernen (Zutaten bleiben)">✕</button>
+          </div>`;
+        }
         const st = ingStatus(ing);
-        return `<div class="ing-row" data-i="${i}">
+        const hasHeadings = items.some((x) => x.heading != null);
+        return `<div class="ing-row${inGroup ? ' in-group' : ''}" data-i="${i}">
+          ${
+            hasHeadings
+              ? `<span class="ing-move"><button type="button" data-act="ing-up" aria-label="Nach oben" title="Nach oben (auch in andere Unterkategorie)" ${i ? '' : 'disabled'}>▲</button><button type="button" data-act="ing-down" aria-label="Nach unten" title="Nach unten" ${
+                  i < items.length - 1 ? '' : 'disabled'
+                }>▼</button></span>`
+              : ''
+          }
           <input class="ing-name" list="ingredientNames" placeholder="Zutat" value="${esc(ing.name)}" data-f="name" aria-label="Zutat" />
           <input class="ing-amount" type="number" min="0" step="any" placeholder="Menge" value="${esc(ing.amount)}" data-f="amount" aria-label="Menge" />
           <select data-f="unit" aria-label="Einheit">
@@ -1028,6 +1066,7 @@
     const r = editor.recipe;
     const t = N.emptyTotals();
     for (const ing of r.ingredients) {
+      if (ing.heading != null) continue;
       const amount = parseFloat(ing.amount);
       if (!ing.name.trim() || !(amount > 0)) continue;
       const info = infoFor(ing.name);
@@ -1054,6 +1093,8 @@
       editor.recipe.ingredients[i][f] = ev.target.value;
       if (f !== 'amount') updateIngStatus(row, i);
     }
+    const head = ev.target.closest('.ing-group');
+    if (head) editor.recipe.ingredients[Number(head.dataset.i)].heading = ev.target.value;
     renderEditorNutri();
   });
   // Englische Zutatennamen beim Verlassen des Feldes ins Deutsche übersetzen
@@ -1095,11 +1136,29 @@
     }
     const btn = ev.target.closest('[data-act]');
     if (!btn) return;
-    const row = btn.closest('.ing-row');
+    const row = btn.closest('.ing-row, .ing-group');
     const i = row ? Number(row.dataset.i) : -1;
+    const items = editor.recipe.ingredients;
+    if (btn.dataset.act === 'ing-up' || btn.dataset.act === 'ing-down') {
+      const j = btn.dataset.act === 'ing-up' ? i - 1 : i + 1;
+      if (j < 0 || j >= items.length) return;
+      [items[i], items[j]] = [items[j], items[i]];
+      renderIngTable();
+      $(`#ingTable [data-i="${j}"] [data-act="${btn.dataset.act}"]`)?.focus();
+      return;
+    }
+    if (btn.dataset.act === 'ing-add-here') {
+      // ans Ende dieser Unterkategorie (vor die nächste Überschrift)
+      let k = i + 1;
+      while (k < items.length && items[k].heading == null) k++;
+      items.splice(k, 0, { name: '', amount: '', unit: 'g' });
+      renderIngTable();
+      $(`#ingTable [data-i="${k}"] .ing-name`).focus();
+      return;
+    }
     if (btn.dataset.act === 'ing-remove') {
       editor.recipe.ingredients.splice(i, 1);
-      if (!editor.recipe.ingredients.length) editor.recipe.ingredients.push({ name: '', amount: '', unit: 'g' });
+      if (!editor.recipe.ingredients.some((x) => x.heading == null)) editor.recipe.ingredients.push({ name: '', amount: '', unit: 'g' });
       renderIngTable();
       renderEditorNutri();
     } else if (btn.dataset.act === 'ing-lookup') {
@@ -1121,6 +1180,24 @@
     $('#tagPicker .tag-new').focus();
   });
 
+  $('#addGroupBtn').addEventListener('click', () => {
+    const items = editor.recipe.ingredients;
+    let at;
+    if (!items.some((x) => x.heading != null)) {
+      // erste Unterkategorie: fasst die bisherigen Zutaten zusammen
+      items.unshift({ heading: '' });
+      at = 0;
+      if (items.slice(1).some((x) => x.name && x.name.trim())) {
+        toast('Die bisherigen Zutaten gehören jetzt zu dieser Unterkategorie – gib ihr einen Namen.');
+      }
+    } else {
+      items.push({ heading: '' }, { name: '', amount: '', unit: 'g' });
+      at = items.length - 2;
+    }
+    renderIngTable();
+    $(`#ingTable [data-i="${at}"] .ing-group-name`).focus();
+  });
+
   $('#addIngBtn').addEventListener('click', () => {
     editor.recipe.ingredients.push({ name: '', amount: '', unit: 'g' });
     renderIngTable();
@@ -1137,11 +1214,25 @@
     r.servings = Math.max(1, parseInt(form.servings.value, 10) || 1);
     r.instructions = form.instructions.value.trim();
     r.sourceUrl = form.sourceUrl.value.trim();
-    r.ingredients = r.ingredients
-      .map((i) => ({ name: i.name.trim(), amount: parseFloat(String(i.amount).replace(',', '.')), unit: i.unit }))
-      .filter((i) => i.name && i.amount > 0);
-    if (!r.name) return;
-    if (!r.ingredients.length) {
+    // Überschriften-Zeilen → Feld „group“ an jeder Zutat
+    let group = '';
+    let n = 0;
+    const out = [];
+    for (const i of r.ingredients) {
+      if (i.heading != null) {
+        n++;
+        group = i.heading.trim() || `Teil ${n}`;
+        continue;
+      }
+      const ing = { name: i.name.trim(), amount: parseFloat(String(i.amount).replace(',', '.')), unit: i.unit };
+      if (group) ing.group = group;
+      if (ing.name && ing.amount > 0) out.push(ing);
+    }
+    const before = r.ingredients;
+    r.ingredients = out;
+    if (!r.name || !r.ingredients.length) {
+      r.ingredients = before;
+      if (!r.name) return;
       toast('Bitte mindestens eine Zutat mit Menge angeben');
       return;
     }
@@ -1536,7 +1627,7 @@
               <tr><td>Linsencurry</td><td>Zwiebel</td><td>1</td><td>Stück</td><td></td></tr>
             </tbody>
           </table>
-          <p class="muted small">Optional erkannt: <b>Tag</b> &amp; <b>Mahlzeit</b> (→ Wochenplan), <b>Portionen</b>, <b>Kategorie</b>,
+          <p class="muted small">Optional erkannt: <b>Tag</b> &amp; <b>Mahlzeit</b> (→ Wochenplan), <b>Portionen</b>, <b>Kategorie</b>, <b>Teil</b> (Unterkategorie wie „Reis“/„Soße“),
             Nährwert-Spalten (kcal, Protein, Fett, KH) sowie ein eigenes Blatt mit <b>Zutat + Nährwerten pro 100 g</b>.
             Einheiten: g, kg, ml, l, EL, TL, Stück. Englische Zutatennamen werden automatisch übersetzt.</p>
           <button class="btn btn-sm" data-act="template">⬇ Vorlage herunterladen</button>

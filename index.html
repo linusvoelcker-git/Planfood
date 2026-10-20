@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#2a7d6b" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/styles.css?v=2026101901" />
+  <link rel="stylesheet" href="css/styles.css?v=2026102001" />
 </head>
 <body>
   <header class="topbar">
@@ -153,9 +153,12 @@
         </div>
 
         <div class="field">
-          <span>Zutaten <small>(Mengen in Gramm oder Stück)</small></span>
+          <span>Zutaten <small>(optional in Unterkategorien, z. B. „Reis“ und „Soße“)</small></span>
           <div class="ing-table" id="ingTable"></div>
-          <button type="button" class="btn btn-ghost btn-sm" id="addIngBtn">＋ Zutat hinzufügen</button>
+          <div class="ing-buttons">
+            <button type="button" class="btn btn-ghost btn-sm" id="addIngBtn">＋ Zutat hinzufügen</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="addGroupBtn">＋ Unterkategorie</button>
+          </div>
           <datalist id="ingredientNames"></datalist>
         </div>
 
@@ -216,14 +219,14 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="js/foods.js?v=2026101901"></script>
-  <script src="js/nutrition.js?v=2026101901"></script>
-  <script src="js/store.js?v=2026101901"></script>
-  <script src="js/sync.js?v=2026101901"></script>
-  <script src="js/translate.js?v=2026101901"></script>
-  <script src="js/textrecipe.js?v=2026101901"></script>
-  <script src="js/scanner.js?v=2026101901"></script>
-  <script src="js/importer.js?v=2026101901"></script>
-  <script src="js/app.js?v=2026101901"></script>
+  <script src="js/foods.js?v=2026102001"></script>
+  <script src="js/nutrition.js?v=2026102001"></script>
+  <script src="js/store.js?v=2026102001"></script>
+  <script src="js/sync.js?v=2026102001"></script>
+  <script src="js/translate.js?v=2026102001"></script>
+  <script src="js/textrecipe.js?v=2026102001"></script>
+  <script src="js/scanner.js?v=2026102001"></script>
+  <script src="js/importer.js?v=2026102001"></script>
+  <script src="js/app.js?v=2026102001"></script>
 </body>
 </html>

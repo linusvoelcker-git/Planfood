@@ -28,6 +28,7 @@ window.PF_IMPORT = (function () {
   const COLUMNS = {
     name: /^(gericht|rezept|rezeptname|speise|name)\b/,
     ing: /^zutat/,
+    group: /^(gruppe|teil\b|komponente|unterkategorie|bestandteil)/,
     amount: /^menge/,
     unit: /^einheit/,
     day: /^(tag|wochentag)$/,
@@ -189,7 +190,10 @@ window.PF_IMPORT = (function () {
         }
         if (conv.warn) warnings.add(conv.warn);
         const qty = Math.round(amount * conv.factor * 100) / 100;
-        block.ingredients.push({ name: ingName, amount: qty, unit: conv.unit });
+        const ing = { name: ingName, amount: qty, unit: conv.unit };
+        const group = cleanName(get(row, 'group'));
+        if (group) ing.group = group;
+        block.ingredients.push(ing);
 
         // Nährwerte der Zeile (absolut) → pro 100 g zurückrechnen, falls kein Nährwert-Blatt
         const grams = N.gramsOf(qty, conv.unit);
@@ -244,14 +248,16 @@ window.PF_IMPORT = (function () {
     const XLSX = await loadLib();
     const wb = XLSX.utils.book_new();
     const recipes = XLSX.utils.aoa_to_sheet([
-      ['Gericht', 'Kategorie', 'Tags', 'Portionen', 'Zutat', 'Menge', 'Einheit', 'Zubereitung'],
-      ['Overnight Oats', 'Frühstück', 'Schnell, Meal Prep', 1, 'Haferflocken', 60, 'g', 'Alles verrühren und über Nacht kühlen.'],
-      ['Overnight Oats', 'Frühstück', '', 1, 'Milch', 150, 'g', ''],
-      ['Overnight Oats', 'Frühstück', '', 1, 'Banane', 1, 'Stück', ''],
+      ['Gericht', 'Kategorie', 'Tags', 'Portionen', 'Teil', 'Zutat', 'Menge', 'Einheit', 'Zubereitung'],
+      ['Overnight Oats', 'Frühstück', 'Schnell, Meal Prep', 1, '', 'Haferflocken', 60, 'g', 'Alles verrühren und über Nacht kühlen.'],
+      ['Overnight Oats', 'Frühstück', '', 1, '', 'Milch', 150, 'g', ''],
+      ['Overnight Oats', 'Frühstück', '', 1, '', 'Banane', 1, 'Stück', ''],
       [],
-      ['Linsencurry', 'Hauptgericht', 'Vegan, Günstig', 3, 'Rote Linsen', 200, 'g', 'Zwiebel anschwitzen, Linsen und Kokosmilch 20 Min. köcheln.'],
-      ['Linsencurry', 'Hauptgericht', '', 3, 'Kokosmilch', 400, 'ml', ''],
-      ['Linsencurry', 'Hauptgericht', '', 3, 'Zwiebel', 1, 'Stück', ''],
+      ['Reis mit Erdnusssoße', 'Hauptgericht', 'Vegan', 2, 'Reis', 'Reis', 150, 'g', 'Reis in Wasser garen. Für die Soße alles verrühren.'],
+      ['Reis mit Erdnusssoße', 'Hauptgericht', '', 2, 'Reis', 'Wasser', 300, 'ml', ''],
+      ['Reis mit Erdnusssoße', 'Hauptgericht', '', 2, 'Soße', 'Erdnussbutter', 2, 'EL', ''],
+      ['Reis mit Erdnusssoße', 'Hauptgericht', '', 2, 'Soße', 'Sojasauce', 2, 'EL', ''],
+      ['Reis mit Erdnusssoße', 'Hauptgericht', '', 2, 'Soße', 'Wasser', 50, 'ml', ''],
     ]);
     const nutri = XLSX.utils.aoa_to_sheet([
       ['Zutat', 'kcal', 'Protein', 'Fett', 'Kohlenhydrate', 'Ballaststoffe'],

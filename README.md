@@ -16,6 +16,10 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
 - **Tags & Filter**: farbige Tags wie *High Protein, Schnell, Vegan, Low Carb, Meal Prep, Günstig*.
   Im Rezept-Editor per Klick zuweisen oder neue anlegen; über der Kartei als Filter (mehrere = alle müssen passen).
   Farben/Namen unter ⚙︎ → *Tags verwalten*. Beim Excel-Import wird eine Spalte *Tags* (kommagetrennt) übernommen.
+- **Unterkategorien bei Zutaten** (Editor → „＋ Unterkategorie“): z. B. „Reis“ und „Soße“ mit eigenen Zutaten.
+  Die gleiche Zutat darf in mehreren Teilen vorkommen (Wasser für Reis *und* Soße) – die Einkaufsliste zählt sie
+  zusammen und zeigt „Rezept (Reis + Soße)“. Zutaten lassen sich mit ▲▼ zwischen den Teilen verschieben.
+  Überschriften wie „Für die Soße:“ beim Import aus Text sowie eine Excel-Spalte *Teil* werden übernommen.
 - **Rezept-Editor**: Mengen in **g, ml, l, EL, TL** oder **Stück** (für Nährwerte: ml ≈ g, EL = 15 g, TL = 5 g;
   in der Einkaufsliste werden ml und l zusammengezählt). Nährwerte werden beim Tippen erkannt (✓ erkannt / ＋ Nährwerte).
   **Englische Zutaten** („eggs“, „rolled oats“, „olive oil“ …) werden automatisch übersetzt – über ein eingebautes

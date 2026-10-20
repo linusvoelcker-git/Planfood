@@ -76,6 +76,10 @@ window.PF_FOODS = (function () {
     ['Frühlingszwiebeln', ['lauchzwiebeln'], 32, 1.8, 4.7, 0.2, 2.6, 2.3, 15],
     ['Lauch', ['porree'], 31, 2.2, 3.3, 0.3, 2.3, 2.3, 250],
     ['Salz', [], 0, 0, 0, 0, 0, 0, null],
+    ['Wasser', ['leitungswasser', 'kochendes wasser', 'heißes wasser'], 0, 0, 0, 0, 0, 0, null],
+    ['Sojasauce', ['sojasoße', 'sojasosse', 'soja sauce'], 53, 8.1, 4.9, 0.6, 0.8, 0.4, null],
+    ['Tahini', ['tahin', 'sesampaste', 'sesammus'], 595, 17.0, 11.0, 54.0, 9.3, 0.5, null],
+    ['Sesam', ['sesamsamen', 'sesamkörner'], 573, 17.7, 11.7, 49.7, 11.8, 0.3, null],
     ['Pfeffer', [], 251, 10.4, 38.7, 3.3, 25.3, 0.6, null],
   ];
 
