@@ -672,6 +672,7 @@ window.PF_STORE = (function () {
     week.shopping ||= { bought: {}, manual: [] };
     week.shopping.bought ||= {};
     week.shopping.manual ||= [];
+    week.shopping.home ||= {}; // schon zu Hause: { [key]: Menge }
     return week.shopping;
   }
 
@@ -699,10 +700,15 @@ window.PF_STORE = (function () {
         rows.push({ ...need, id: need.key + '#pantry', checked: true, pantry: true });
         continue;
       }
-      const have = Math.min(sh.bought[need.key] || 0, need.amount);
-      const open = roundAmount(need.amount - have, need.unit);
-      if (have > 0) rows.push({ ...need, id: need.key + '#done', amount: have, checked: true });
-      if (open > 0) rows.push({ ...need, id: need.key + '#open', amount: open, checked: false, extraTo: have > 0 ? have : 0 });
+      // was schon zu Hause ist, muss nicht gekauft werden
+      const home = Math.min((sh.home && sh.home[need.key]) || 0, need.amount);
+      const toBuy = need.amount - home;
+      const have = Math.min(sh.bought[need.key] || 0, toBuy);
+      const open = roundAmount(toBuy - have, need.unit);
+      const extra = { total: need.amount, home };
+      if (home > 0) rows.push({ ...need, ...extra, id: need.key + '#home', amount: roundAmount(home, need.unit), checked: true, atHome: true });
+      if (have > 0) rows.push({ ...need, ...extra, id: need.key + '#done', amount: roundAmount(have, need.unit), checked: true });
+      if (open > 0) rows.push({ ...need, ...extra, id: need.key + '#open', amount: open, checked: false, extraTo: have > 0 ? have : 0 });
     }
     for (const m of sh.manual) rows.push({ id: m.key, key: m.key, name: m.name, unit: '', amount: 0, recipes: [], checked: m.checked, manual: true });
     return rows;
@@ -714,12 +720,27 @@ window.PF_STORE = (function () {
     const sh = shopping(week);
     const manual = sh.manual.find((m) => m.key === id);
     if (manual) manual.checked = checked;
-    else {
+    else if (id.endsWith('#home')) {
+      // „Zu Hause“-Eintrag abgewählt → doch nichts da
+      if (!checked) delete sh.home[id.replace(/#home$/, '')];
+    } else {
       const key = id.replace(/#(done|open)$/, '');
       const need = computeNeeds(week).find((n) => n.key === key);
-      if (checked && need) sh.bought[key] = need.amount;
+      if (checked && need) sh.bought[key] = Math.max(0, need.amount - (sh.home[key] || 0));
       else delete sh.bought[key];
     }
+    save();
+  }
+  /** Menge, die schon zu Hause ist (wird von der Einkaufsliste abgezogen); 0 = nichts */
+  function setHomeAmount(start, key, amount) {
+    const week = getWeek(start);
+    if (!week || week.archived) return;
+    const sh = shopping(week);
+    if (amount > 0) sh.home[key] = amount;
+    else delete sh.home[key];
+    // Abgehaktes darf nicht mehr sein als der Rest, der noch gekauft werden muss
+    const need = computeNeeds(week).find((n) => n.key === key);
+    if (need && sh.bought[key] > need.amount - (sh.home[key] || 0)) sh.bought[key] = Math.max(0, need.amount - (sh.home[key] || 0));
     save();
   }
   function setAllItems(start, checked) {
@@ -727,7 +748,7 @@ window.PF_STORE = (function () {
     if (!week || week.archived) return;
     const sh = shopping(week);
     sh.bought = {};
-    if (checked) for (const n of computeNeeds(week)) sh.bought[n.key] = n.amount;
+    if (checked) for (const n of computeNeeds(week)) sh.bought[n.key] = Math.max(0, n.amount - (sh.home[n.key] || 0));
     sh.manual.forEach((m) => (m.checked = checked));
     save();
   }
@@ -759,6 +780,8 @@ window.PF_STORE = (function () {
     Object.assign(statusCache, { key: cacheKey, state, week, map });
     const mealIdx = Object.fromEntries(MEALS.map((m, i) => [m.key, i]));
     const remaining = { ...((week.shopping && week.shopping.bought) || {}) };
+    // was zu Hause ist, zählt wie gekauft
+    for (const [k, v] of Object.entries((week.shopping && week.shopping.home) || {})) remaining[k] = (remaining[k] || 0) + v;
     for (const n of computeNeeds(week)) if (inPantry(n)) remaining[n.key] = Infinity;
     const byEntry = new Map();
     for (const u of weekUses(week)) {
@@ -1237,6 +1260,7 @@ window.PF_STORE = (function () {
     computeNeeds,
     shoppingItems,
     toggleItem,
+    setHomeAmount,
     setAllItems,
     addManualItem,
     removeItem,

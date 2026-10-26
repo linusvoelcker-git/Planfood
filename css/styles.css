@@ -3432,3 +3432,48 @@ button.tag.active {
 .tile-weight {
   background: var(--accent-soft);
 }
+
+/* ============ Einkaufsliste: schon zu Hause ============ */
+.amt.editable {
+  cursor: pointer;
+  border-bottom: 1px dashed currentColor;
+  border-radius: 2px;
+}
+.amt.editable:hover,
+.amt.editable:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+.sitem-sub.home {
+  color: var(--accent);
+}
+.sitem-home {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin: 0 0 0.6rem 1.9rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--accent-soft);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.sitem .sitem-home input {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  width: 5.5rem;
+  font: inherit;
+  padding: 0.3rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  margin: 0 0.2rem;
+}
+.sitem-home-btns {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}

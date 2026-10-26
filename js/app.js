@@ -43,6 +43,7 @@
     favOnly: false, // Kartei: nur Favoriten
     shopSort: loadPref('planfood:shopSort', 'aisle'), // Einkaufsliste: 'aisle' (nach Bereich) | 'az'
     shopMore: null, // Einkaufsliste: aufgeklappter Eintrag („⋯“)
+    shopEdit: null, // Einkaufsliste: Zeile, bei der gerade „schon zu Hause“ eingetragen wird
   };
 
   /* ================= Hilfsfunktionen ================= */
@@ -577,15 +578,27 @@
     }
 
     const pct = Math.round((done / items.length) * 100);
+    // „Schon zu Hause“: Menge eintragen, die von der Einkaufsliste abgezogen wird
+    const homeForm = (i) => `<form class="sitem-home" data-act="home-form" data-key="${esc(i.key)}" data-unit="${esc(i.unit)}">
+        <label>🏠 Schon zu Hause <input name="home" inputmode="decimal" autocomplete="off" value="${i.home ? fmtNum(i.home, 2) : ''}" placeholder="z. B. 200" aria-label="Menge schon zu Hause" /> ${esc(i.unit)}</label>
+        <span class="muted small">Benötigt insgesamt ${fmtAmount(i.total, i.unit)}</span>
+        <span class="sitem-home-btns">
+          <button class="btn btn-sm btn-primary">Abziehen</button>
+          ${i.home ? '<button type="button" class="btn btn-sm" data-act="home-clear">Nichts zu Hause</button>' : ''}
+          <button type="button" class="btn btn-sm btn-ghost" data-act="home-cancel">Abbrechen</button>
+        </span>
+      </form>`;
     const sub = (i) => {
+      if (i.atHome) return `<span class="sitem-sub home">🏠 schon zu Hause${i.total > i.home ? ` – von ${fmtAmount(i.total, i.unit)}` : ''}</span>`;
+      const homeNote = i.home > 0 ? `<span class="sitem-sub home">🏠 ${fmtAmount(i.home, i.unit)} schon zu Hause abgezogen (gesamt ${fmtAmount(i.total, i.unit)})</span>` : '';
       const merged =
         i.merged && (i.merged.length || i.converted)
           ? `<span class="sitem-sub merged" title="In der Einkaufsliste zusammengefasst">🔗 ${
               i.merged.length ? `auch „${esc(i.merged.join('“, „'))}“` : ''
             }${i.merged.length && i.converted ? ' · ' : ''}${i.converted ? 'Einheiten umgerechnet' : ''}</span>`
           : '';
-      if (i.extraTo) return `<span class="sitem-sub extra">＋ zusätzlich (${fmtAmount(i.extraTo, i.unit)} schon abgehakt)</span>${merged}`;
-      return (i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : '') + merged;
+      if (i.extraTo) return `<span class="sitem-sub extra">＋ zusätzlich (${fmtAmount(i.extraTo, i.unit)} schon abgehakt)</span>${homeNote}${merged}`;
+      return (i.recipes && i.recipes.length ? `<span class="sitem-sub">${esc(i.recipes.join(', '))}</span>` : '') + homeNote + merged;
     };
     // andere Zutaten der Liste – zum Zusammenfassen
     const otherNames = [...new Set(items.filter((x) => !x.manual).map((x) => x.name))].sort((a, b) => a.localeCompare(b, 'de'));
@@ -597,7 +610,13 @@
           <input type="checkbox" data-key="${esc(i.id)}" ${i.checked ? 'checked' : ''} ${ro ? 'disabled' : ''} />
           <span class="check" aria-hidden="true"></span>
           <span class="sitem-text">
-            <span class="sitem-main">${i.unit ? `<span class="amt">${fmtAmount(i.amount, i.unit)}</span> ` : ''}${esc(i.name)}</span>
+            <span class="sitem-main">${
+              i.unit
+                ? ro || i.manual
+                  ? `<span class="amt">${fmtAmount(i.amount, i.unit)}</span> `
+                  : `<span class="amt editable" data-act="edit-home" data-id="${esc(i.id)}" role="button" tabindex="0" title="Antippen: abziehen, was du schon zu Hause hast">${fmtAmount(i.amount, i.unit)}</span> `
+                : ''
+            }${esc(i.name)}</span>
             ${sub(i)}
           </span>
         </label>
@@ -624,6 +643,7 @@
               </div>`
             : ''
         }
+        ${ui.shopEdit === i.id ? homeForm(i) : ''}
       </li>`;
     };
     const mode = ui.shopSort;
@@ -3362,6 +3382,20 @@
         case 'print-list':
           printView('list');
           break;
+        case 'edit-home':
+          ev.preventDefault(); // nicht abhaken
+          ui.shopEdit = ui.shopEdit === act.dataset.id ? null : act.dataset.id;
+          renderShopping();
+          $('#shoppingPanel .sitem-home input')?.select();
+          break;
+        case 'home-cancel':
+          ui.shopEdit = null;
+          renderShopping();
+          break;
+        case 'home-clear':
+          ui.shopEdit = null;
+          S.setHomeAmount(ui.viewStart, act.closest('form').dataset.key, 0);
+          break;
         case 'sugg-merge':
           S.mergeIngredients(act.dataset.from, act.dataset.into);
           toast(`🔗 „${act.dataset.from}“ zählt jetzt als „${act.dataset.into}“`);
@@ -3398,8 +3432,30 @@
         }
       }
     });
+    shop.addEventListener('keydown', (ev) => {
+      const amt = ev.target.closest('.amt.editable');
+      if (amt && (ev.key === 'Enter' || ev.key === ' ')) {
+        ev.preventDefault();
+        amt.click();
+      }
+      if (ev.key === 'Escape' && ev.target.closest('.sitem-home')) {
+        ui.shopEdit = null;
+        renderShopping();
+      }
+    });
     shop.addEventListener('submit', (ev) => {
       ev.preventDefault();
+      if (ev.target.dataset.act === 'home-form') {
+        // „200“, „-200“, „0,2 kg“ …
+        const raw = String(ev.target.home.value).trim().toLowerCase();
+        let v = parseFloat(raw.replace(/^[-−–]\s*/, '').replace(',', '.')) || 0;
+        const unit = ev.target.dataset.unit;
+        if ((unit === 'g' && /kg/.test(raw)) || (unit === 'ml' && /\d\s*l\b|liter/.test(raw))) v *= 1000;
+        ui.shopEdit = null;
+        S.setHomeAmount(ui.viewStart, ev.target.dataset.key, v);
+        if (v > 0) toast(`🏠 ${fmtAmount(v, unit)} abgezogen`);
+        return;
+      }
       const input = ev.target.item;
       const v = input.value.trim();
       if (v) S.addManualItem(ui.viewStart, v);

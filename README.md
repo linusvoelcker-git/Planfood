@@ -28,6 +28,8 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
 - **Einkaufsliste läuft automatisch mit**: jedes Rezept im Kalender landet sofort mit seinen Zutaten in der Liste; gleiche Zutat + Einheit wird addiert,
   skaliert nach Portionen. Einträge zum Abhaken – Abgehaktes rutscht in den zugeklappten Bereich „✓ Erledigt“, oben steht nur,
   was noch fehlt. Eigene Einträge möglich, Kopieren als Text.
+  **Schon zu Hause?** Auf die Mengenangabe tippen (z. B. „1 kg Tofu“) und eintragen, was noch da ist („200“ oder „-200“,
+  auch „0,2 kg“) – der Rest bleibt auf der Liste, das Vorhandene steht unter „Erledigt“ und zählt für den Kalender als da.
 - **Gleiche Zutat, andere Schreibweise**: Die Einkaufsliste fasst automatisch zusammen, was gleich ist –
   Synonyme aus der Nährwerttabelle („Knoblauchzehen“ → „Knoblauch“) und Einzahl/Mehrzahl („Zwiebeln“ → „Zwiebel“).
   Kommt eine Zutat in verschiedenen Einheiten vor (Stück, g, EL …), wird mit dem Gewicht pro Stück bzw. Löffel
