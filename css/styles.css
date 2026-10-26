@@ -3424,3 +3424,11 @@ button.tag.active {
 .done-box .shop-list {
   margin-bottom: 0.4rem;
 }
+
+/* ============ Gewicht pro Portion ============ */
+.rcard-meta .pw {
+  color: var(--muted);
+}
+.tile-weight {
+  background: var(--accent-soft);
+}

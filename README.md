@@ -72,6 +72,8 @@ Reine statische Website (HTML/CSS/JavaScript): kein Server und kein Build-Schrit
   nachschlagen und Werte pro 100 g übernehmen; ist das Produkt nicht dort, **🧾 Nährwerttabelle fotografieren** →
   Texterkennung direkt auf dem Gerät (Tesseract, ohne KI-Dienst/Server) liest die „pro 100 g“-Spalte aus. Ergebnisse
   werden markiert und sollten kurz geprüft werden. Alternativ Foto vom Barcode wählen oder Nummer eintippen.
+- **Gewicht pro Portion**: Summe aller Zutaten (Rohgewicht, ml ≈ g, Stück über das Stückgewicht) geteilt durch die
+  Portionen – auf der Karteikarte („2 Portionen à 545 g“), im Rezept, in der Auswahl, im Editor und als Tooltip im Kalender.
 - **Nährwerte**: pro Portion, pro Tag und pro Woche (Makros + Mikronährstoffe, sobald Daten vorhanden sind).
 
 ## Starten

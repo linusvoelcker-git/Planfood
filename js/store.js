@@ -428,6 +428,20 @@ window.PF_STORE = (function () {
     }
     return t;
   }
+  /** Gewicht des Gerichts: { total, perServing, missing: [Zutaten ohne bekanntes Gewicht] } */
+  function recipeWeight(recipe) {
+    let total = 0;
+    const missing = [];
+    for (const ing of recipe.ingredients) {
+      if (ing.heading != null) continue; // Überschrift im Editor
+      const amount = parseFloat(String(ing.amount).replace(',', '.'));
+      if (!String(ing.name || '').trim() || !(amount > 0)) continue;
+      const grams = N.gramsOf(amount, ing.unit, ingredientInfo(ing.name) || N.autoDetect(ing.name));
+      if (grams == null) missing.push(ing.name);
+      else total += grams;
+    }
+    return { total, perServing: total / Math.max(1, recipe.servings || 1), missing };
+  }
   function recipePerServing(recipe) {
     const t = recipeTotals(recipe);
     const s = Math.max(1, recipe.servings || 1);
@@ -1212,6 +1226,7 @@ window.PF_STORE = (function () {
     setIngredientInfo,
     knownIngredientNames,
     recipeTotals,
+    recipeWeight,
     recipePerServing,
     getWeek,
     entries,

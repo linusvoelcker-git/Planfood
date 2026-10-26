@@ -105,6 +105,16 @@
     return `<span class="tag ${extra}" style="--t:${tag.color}">${esc(tag.name)}</span>`;
   }
 
+  /** Gewicht einer Portion als Text („450 g“, „1,2 kg“); leer, wenn nichts bekannt ist */
+  function fmtWeight(g) {
+    if (!(g > 0)) return '';
+    return g >= 1000 ? `${fmtNum(g / 1000, 2)} kg` : `${fmtNum(g < 100 ? Math.round(g) : Math.round(g / 5) * 5)} g`;
+  }
+  function portionWeight(recipe) {
+    const w = S.recipeWeight(recipe);
+    return { ...w, text: fmtWeight(w.perServing), approx: w.missing.length > 0 };
+  }
+
   function infoFor(name) {
     return S.ingredientInfo(name) || N.autoDetect(name);
   }
@@ -313,11 +323,13 @@
     if (!recipe) return '';
     const st = S.entryStatus(week, e);
     const cls = st ? (st.ok ? ' status-ok' : ' status-missing') : '';
-    const title = st
-      ? st.ok
-        ? 'Alle Zutaten vorhanden'
-        : 'Es fehlen noch: ' + st.missing.join(', ')
-      : '';
+    const pw = portionWeight(recipe);
+    const title = [
+      pw.text ? `Portion ${pw.approx ? 'mind.' : 'ca.'} ${pw.text}` : '',
+      st ? (st.ok ? 'Alle Zutaten vorhanden' : 'Es fehlen noch: ' + st.missing.join(', ')) : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
     return `<div class="entry${cls}" ${ro ? '' : 'draggable="true"'} data-uid="${e.uid}" style="--c:${recipe.color}" title="${esc(title)}" tabindex="0">
       <span class="entry-name">${esc(recipe.name)}</span>
       <span class="entry-meta">
@@ -407,7 +419,10 @@
           <div class="rcard-tab"><span>${r.fav ? '<b class="fav-star" title="Favorit">★</b> ' : ''}${esc(r.name)}</span></div>
           <div class="rcard-body">
             <div class="rcard-meta">
-              <span>${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}</span>
+              <span>${r.servings} ${r.servings === 1 ? 'Portion' : 'Portionen'}${(() => {
+                const w = portionWeight(r);
+                return w.text ? ` <span class="pw" title="Gewicht pro Portion${w.approx ? ' (ohne ' + esc(w.missing.join(', ')) + ')' : ''}">à ${w.approx ? '≥ ' : ''}${w.text}</span>` : '';
+              })()}</span>
               <span class="rcard-dots">${tagsOf(r)
                 .map((t) => `<i style="--t:${t.color}" title="${esc(t.name)}"></i>`)
                 .join('')}</span>
@@ -739,10 +754,11 @@
             return `<h4 class="rlist-head">${esc(cat)} <span>${items.length}</span></h4><ul class="rlist">${items
               .map((r) => {
                 const kcal = S.recipePerServing(r).values.kcal;
+                const w = portionWeight(r).text;
                 return `<li class="ritem pick-item" tabindex="0" data-id="${r.id}" style="--c:${r.color}">
                   <span class="ritem-name">${r.fav ? '<b class="fav-star">★</b> ' : ''}${esc(r.name)}</span>
                   <span class="rcard-dots">${tagsOf(r).map((t) => `<i style="--t:${t.color}"></i>`).join('')}</span>
-                  ${kcal ? `<span class="pick-kcal">${fmtNum(kcal)} kcal</span>` : ''}
+                  ${kcal || w ? `<span class="pick-kcal">${[w, kcal ? fmtNum(kcal) + ' kcal' : ''].filter(Boolean).join(' · ')}</span>` : ''}
                 </li>`;
               })
               .join('')}</ul>`;
@@ -819,6 +835,7 @@
     const scale = entry ? entry.servings / recipe.servings : 1;
     const st = entry ? S.entryStatus(week, entry) : null;
     const per = S.recipePerServing(recipe);
+    const pw = portionWeight(recipe);
     const live = S.state.recipes.some((r) => r.id === recipe.id);
     const when = S.lastPlanned(recipe.id);
     const fmtDate = (iso) => {
@@ -875,7 +892,9 @@
           <span class="detail-cat">${esc(recipe.category || 'Sonstiges')}</span>
           <h2>${esc(recipe.name)}</h2>
           ${tagsOf(recipe).length ? `<div class="detail-tags">${tagsOf(recipe).map((t) => tagPill(t)).join('')}</div>` : ''}
-          <span class="muted">Rezept für ${recipe.servings} ${recipe.servings === 1 ? 'Portion' : 'Portionen'}</span>
+          <span class="muted">Rezept für ${recipe.servings} ${recipe.servings === 1 ? 'Portion' : 'Portionen'}${
+            pw.text ? ` · ${pw.approx ? 'mind.' : 'ca.'} ${pw.text} pro Portion` : ''
+          }</span>
           ${whenLine}
         </div>
         <div class="detail-head-btns">
@@ -907,7 +926,15 @@
                   return `<div class="tile"><span class="tile-v">${N.format(k, per.values[k] || 0)}</span><span class="tile-l">${d.label}</span></div>`;
                 })
                 .join('')}
+              ${
+                pw.text
+                  ? `<div class="tile tile-weight" title="Summe aller Zutaten geteilt durch die Portionen${pw.approx ? ` – ohne ${esc(pw.missing.join(', '))} (Gewicht pro Stück fehlt)` : ''}"><span class="tile-v">${
+                      pw.approx ? '≥ ' : ''
+                    }${pw.text}</span><span class="tile-l">Portion gesamt</span></div>`
+                  : ''
+              }
             </div>
+            ${pw.approx && pw.text ? `<p class="muted small">Portionsgewicht ohne ${esc(pw.missing.join(', '))} – dafür fehlt das Gewicht pro Stück (über „＋ Nährwerte“ ergänzen).</p>` : ''}
             ${micros ? `<table class="nutri-table compact"><tbody>${micros}</tbody></table>` : '<p class="muted small">Keine Mikronährstoffdaten – über „●“ bei den Zutaten online nachschlagen.</p>'}
             ${per.missing.length ? `<p class="warn">⚠ Ohne Nährwerte: ${esc(per.missing.join(', '))}</p>` : ''}
           </section>
@@ -1154,7 +1181,8 @@
       $('#editorNutri').innerHTML = '<span class="muted">Nährwerte werden automatisch berechnet, sobald du Zutaten einträgst.</span>';
       return;
     }
-    $('#editorNutri').innerHTML = `<strong>Pro Portion:</strong> ${fmtNum((v.kcal || 0) / s)} kcal · ${macroLine(
+    const w = S.recipeWeight({ ingredients: r.ingredients, servings: s });
+    $('#editorNutri').innerHTML = `<strong>Pro Portion:</strong> ${w.perServing > 0 ? `${w.missing.length ? '≥ ' : '≈ '}${fmtWeight(w.perServing)} · ` : ''}${fmtNum((v.kcal || 0) / s)} kcal · ${macroLine(
       Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x / s]))
     )}${t.missing.length ? `<br><span class="warn-inline">Ohne Nährwerte: ${esc(t.missing.join(', '))}</span>` : ''}`;
   }
