@@ -2926,13 +2926,21 @@
       document.body.classList.add('is-dragging');
     });
 
-    document.addEventListener('dragend', () => {
+    // Aufräumen nach dem Ziehen. Wird beim Ablegen neu gezeichnet, verschwindet das gezogene Element –
+    // dann kommt kein „dragend“ mehr an. Deshalb auch direkt beim Ablegen und als Absicherung bei der
+    // nächsten Mausbewegung ohne gedrückte Taste.
+    const endDrag = () => {
       ui.drag = null;
       if (ui.releaseCard) ui.releaseCard();
       $$('.dragging').forEach((el) => el.classList.remove('dragging'));
       $$('.slot.over').forEach((el) => el.classList.remove('over'));
       $('#cardbox').classList.remove('drop-remove', 'over');
       document.body.classList.remove('is-dragging');
+    };
+    document.addEventListener('dragend', endDrag);
+    document.addEventListener('drop', () => setTimeout(endDrag), true);
+    document.addEventListener('pointermove', (ev) => {
+      if (ev.buttons === 0 && document.body.classList.contains('is-dragging')) endDrag();
     });
 
     const cal = $('#calendar');
@@ -2956,8 +2964,10 @@
       ev.preventDefault();
       const day = Number(slot.dataset.day);
       const meal = slot.dataset.meal;
-      if (ui.drag.type === 'recipe') S.addEntry(ui.viewStart, day, meal, ui.drag.id);
-      else S.moveEntry(ui.viewStart, ui.drag.id, day, meal);
+      const drag = ui.drag;
+      endDrag();
+      if (drag.type === 'recipe') S.addEntry(ui.viewStart, day, meal, drag.id);
+      else S.moveEntry(ui.viewStart, drag.id, day, meal);
     });
 
     const box = $('#cardbox');
@@ -2973,7 +2983,9 @@
     box.addEventListener('drop', (ev) => {
       if (ui.drag && ui.drag.type === 'entry') {
         ev.preventDefault();
-        S.removeEntry(ui.viewStart, ui.drag.id);
+        const id = ui.drag.id;
+        endDrag();
+        S.removeEntry(ui.viewStart, id);
         toast('Aus dem Plan entfernt');
       }
     });
